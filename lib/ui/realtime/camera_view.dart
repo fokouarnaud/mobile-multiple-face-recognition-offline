@@ -15,11 +15,8 @@ class CameraView extends StatefulWidget {
   /// Callback to inference stats to [HomeView]
   final Function(Stats stats) statsCallback;
 
-  final List<CameraDescription> cameras;
-
   /// Constructor
   const CameraView({
-    required this.cameras,
     required this.resultsCallback,
     required this.statsCallback,
     super.key,
@@ -30,8 +27,11 @@ class CameraView extends StatefulWidget {
 }
 
 class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
+  /// List of available cameras
+  List<CameraDescription> cameras = [];
+
   /// Controller
-  late CameraController cameraController;
+  CameraController? cameraController;
 
   /// true when inference is ongoing
   late bool predicting;
@@ -56,7 +56,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     //await isolateUtils.start();
 
     // Camera initialization
-    initializeCamera();
+    await _setupCameraController();
 
     // Create an instance of classifier to load model and labels
     //classifier = Classifier();
@@ -66,55 +66,80 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   }
 
   /// Initializes the camera by setting [cameraController]
-  void initializeCamera() async {
-    // cameras[0] for rear-camera
-    cameraController = CameraController(widget.cameras[0], ResolutionPreset.low,
-        enableAudio: false);
+  Future<void> _setupCameraController() async {
+    final List<CameraDescription> _cameras = await availableCameras();
+    if (_cameras.isNotEmpty) {
+      setState(() {
+        cameras = _cameras;
+        cameraController = CameraController(
+          _cameras.first,
+          ResolutionPreset.low,
+          enableAudio: false,
+        );
+      });
 
-    await cameraController.initialize().then((_) async {
-      if (!mounted) {
-        return;
-      }
-      // Stream of image passed to [onLatestImageAvailable] callback
-      await cameraController.startImageStream(onLatestImageAvailable);
+      await cameraController?.initialize().then((_) async {
+        // Stream of image passed to [onLatestImageAvailable] callback
+        await cameraController?.startImageStream(onLatestImageAvailable);
 
-      /// previewSize is size of each image frame captured by controller
-      ///
-      /// 352x288 on iOS, 240p (320x240) on Android with ResolutionPreset.low
-      Size? previewSize = cameraController.value.previewSize;
+        /// previewSize is size of each image frame captured by controller
+        ///
+        /// 352x288 on iOS, 240p (320x240) on Android with ResolutionPreset.low
+        Size? previewSize = cameraController?.value.previewSize;
 
-      /// previewSize is size of raw input image to the model
-      CameraViewSingleton.inputImageSize = previewSize!;
+        /// previewSize is size of raw input image to the model
+        CameraViewSingleton.inputImageSize = previewSize!;
 
-      // the display width of image on screen is
-      // same as screenWidth while maintaining the aspectRatio
-      Size screenSize = MediaQuery.of(context).size;
-      CameraViewSingleton.screenSize = screenSize;
-      CameraViewSingleton.ratio = screenSize.width / previewSize.height;
-    }).catchError((Object e) {
-      if (e is CameraException) {
-        switch (e.code) {
-          case 'CameraAccessDenied':
-            showResponseSnackbar(context, 'CameraAccessDenied');
-            break;
-          default:
-            showResponseSnackbar(context, 'Camera Unexpected Error');
-            break;
+        // the display width of image on screen is
+        // same as screenWidth while maintaining the aspectRatio
+        Size screenSize = MediaQuery.of(context).size;
+        CameraViewSingleton.screenSize = screenSize;
+        CameraViewSingleton.ratio = screenSize.width / previewSize.height;
+        setState(() {});
+      }).catchError((Object e) {
+        if (e is CameraException) {
+          switch (e.code) {
+            case 'CameraAccessDenied':
+              showResponseSnackbar(context, 'CameraAccessDenied');
+              break;
+            default:
+              showResponseSnackbar(context, 'Camera Unexpected Error');
+              break;
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     // Return empty container while the camera is not initialized
-    if (cameraController == null || !cameraController.value.isInitialized) {
-      return Container();
+    if (cameraController == null ||
+        cameraController?.value.isInitialized == false) {
+      return const Center(
+        child:CircularProgressIndicator(),
+      );
     }
 
+   // return AspectRatio(
+   //   aspectRatio: cameraController!.value.aspectRatio,
+    //  child: CameraPreview(
+    //    cameraController!,
+    //  ),
+    //);
     return AspectRatio(
-        aspectRatio: cameraController.value.aspectRatio,
-        child: CameraPreview(cameraController));
+      aspectRatio: 1,
+      child: ClipRect(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: cameraController!.value.previewSize!.height,
+            height: cameraController!.value.previewSize!.width,
+            child: CameraPreview(cameraController!),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Callback to receive each frame [CameraImage] perform inference on it
@@ -180,11 +205,11 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       //  await cameraController.dispose();
       //  break;
       case AppLifecycleState.paused:
-        await cameraController.stopImageStream();
+        await cameraController?.stopImageStream();
         break;
       case AppLifecycleState.resumed:
-        if (!cameraController.value.isStreamingImages) {
-          await cameraController.startImageStream(onLatestImageAvailable);
+        if (cameraController?.value.isStreamingImages == false) {
+          await cameraController?.startImageStream(onLatestImageAvailable);
         }
         break;
       default:
@@ -194,7 +219,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    cameraController.dispose();
+    cameraController?.dispose();
     super.dispose();
   }
 }
