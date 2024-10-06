@@ -1,8 +1,12 @@
 import 'dart:developer' as devtools show log;
+import 'package:camera/camera.dart';
 import 'package:computer/computer.dart';
 import 'package:flutter/material.dart';
-import 'package:flutterface/ui/home_page.dart';
+import 'package:flutterface/ui/realtime/home_view.dart';
 import 'package:logging/logging.dart';
+
+
+
 
 /// Configures logging for the application.
 ///
@@ -16,8 +20,10 @@ void main() async {
       '[${record.loggerName}]: ${record.level.name}: ${record.time}: ${record.message}',
     );
   });
+  /// List of available cameras
+  final cameras =await availableCameras();
   await Computer.shared().turnOn(workersCount: 2);
-  runApp(const MyApp());
+  runApp(MyApp(cameras: cameras));
 }
 
 /// The main application widget.
@@ -26,7 +32,8 @@ void main() async {
 /// It uses the MaterialApp widget to configure the application's title, theme,
 /// and home screen.
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final List<CameraDescription> cameras;
+  const MyApp({required this.cameras,super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +43,8 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const HomePage(title: 'FlutterFace Demo'),
+     // home: const HomePage(title: 'FlutterFace Demo'),
+      home:  HomeView(cameras: cameras),
     );
   }
 }

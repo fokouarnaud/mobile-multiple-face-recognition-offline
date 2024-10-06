@@ -13,6 +13,7 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.2
+  camera: ^0.11.0+2
   image_picker: ^1.1.2
   tflite_flutter: #^0.10.1
     git:
@@ -40,7 +41,7 @@ dependencies:
       ref: isolates
   computer:
     git: "https://github.com/ente-io/computer.git"
-  image: ^4.1.7
+  image: ^4.2.0
 
 dev_dependencies:
   flutter_test:
