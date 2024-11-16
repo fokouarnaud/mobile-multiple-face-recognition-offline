@@ -4,6 +4,7 @@ import 'dart:math' show min, max;
 import 'dart:typed_data' show ByteData, Float32List, Uint8List;
 import 'dart:ui';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/painting.dart' as paint show decodeImageFromList;
 import 'package:flutterface/models/ml/ml_typedefs.dart';
 import 'package:flutterface/services/face_ml/blur_detection_service.dart';
@@ -15,6 +16,7 @@ import 'package:logging/logging.dart';
 import 'package:ml_linalg/linalg.dart';
 
 final _logger = Logger('ImageMlUtil');
+const IOS_BYTES_OFFSET = 28;
 
 /// Reads the pixel color at the specified coordinates.
 Color readPixelColor(
@@ -1038,7 +1040,8 @@ Future<(Float32List, List<AlignmentResult>, List<bool>, List<double>)>
     final grayscalems = blurDetectionStopwatch.elapsedMilliseconds;
     log('creating grayscale matrix took $grayscalems ms');
     final (isBlur, blurValue) = await BlurDetectionService.instance
-        .predictIsBlurGrayLaplacian(faceGrayMatrix, faceDirection: face.getFaceDirection());
+        .predictIsBlurGrayLaplacian(faceGrayMatrix,
+            faceDirection: face.getFaceDirection());
     final blurms = blurDetectionStopwatch.elapsedMilliseconds - grayscalems;
     log('blur detection took $blurms ms');
     log(
@@ -1716,4 +1719,122 @@ int bilinearInterpolation(
 ) {
   return (val1 * fx1 * fy1 + val2 * fx * fy1 + val3 * fx1 * fy + val4 * fx * fy)
       .round();
+}
+
+//// Converts a [CameraImage] to [img_lib.Image] in RGB format
+/// Supports YUV420 and BGRA8888 formats
+img_lib.Image convertCameraImage(CameraImage cameraImage) {
+  switch (cameraImage.format.group) {
+    case ImageFormatGroup.yuv420:
+      return convertYUV420ToImage(cameraImage);
+    case ImageFormatGroup.bgra8888:
+      return convertBGRA8888ToImage(cameraImage);
+    default:
+      throw Exception('Unsupported image format: ${cameraImage.format.group}');
+  }
+}
+
+/// Converts a [CameraImage] in BGRA8888 format to [img_lib.Image] in RGB format
+img_lib.Image convertBGRA8888ToImage(CameraImage cameraImage) {
+  final plane = cameraImage.planes[0];
+
+  return img_lib.Image.fromBytes(
+    width: cameraImage.width,
+    height: cameraImage.height,
+    bytes: plane.bytes.buffer,
+    rowStride: plane.bytesPerRow,
+    bytesOffset: plane.bytesPerRow - (cameraImage.width * 4), // Corrected offset calculation
+    order: img_lib.ChannelOrder.bgra,
+  );
+}
+
+/// Converts a [CameraImage] in YUV420 format to [img_lib.Image] in RGB format
+img_lib.Image convertYUV420ToImage(CameraImage cameraImage) {
+  final int width = cameraImage.width;
+  final int height = cameraImage.height;
+
+  final yBuffer = cameraImage.planes[0].bytes;
+  final uBuffer = cameraImage.planes[1].bytes;
+  final vBuffer = cameraImage.planes[2].bytes;
+
+  final int yRowStride = cameraImage.planes[0].bytesPerRow;
+  final int yPixelStride = cameraImage.planes[0].bytesPerPixel!;
+
+  final int uvRowStride = cameraImage.planes[1].bytesPerRow;
+  final int uvPixelStride = cameraImage.planes[1].bytesPerPixel!;
+
+  // Create image with correct dimensions
+  final image = img_lib.Image(width: width, height: height);
+
+  // YUV420 to RGB conversion
+  for (int y = 0; y < height; y++) {
+    int uvY = (y / 2).floor();
+
+    for (int x = 0; x < width; x++) {
+      int uvX = (x / 2).floor();
+
+      final yIndex = (y * yRowStride) + (x * yPixelStride);
+      final uvIndex = (uvY * uvRowStride) + (uvX * uvPixelStride);
+
+      // YUV values
+      final int yValue = yBuffer[yIndex];
+      final int uValue = uBuffer[uvIndex];
+      final int vValue = vBuffer[uvIndex];
+
+      // Convert YUV to RGB using BT.601 conversion
+      int r = (yValue + (1.370705 * (vValue - 128))).round();
+      int g = (yValue - (0.337633 * (uValue - 128)) - (0.698001 * (vValue - 128))).round();
+      int b = (yValue + (1.732446 * (uValue - 128))).round();
+
+      // Clamp RGB values
+      r = r.clamp(0, 255);
+      g = g.clamp(0, 255);
+      b = b.clamp(0, 255);
+
+      image.setPixelRgb(x, y, r, g, b);
+    }
+  }
+
+  return image;
+}
+
+
+/// Converts CameraImage to Uint8List with configurable format
+/// Supports PNG (lossless) and JPEG (lossy) formats
+Future<Uint8List> cameraImageToUint8List(
+    CameraImage cameraImage, {
+      ImageFormat format = ImageFormat.jpeg,
+    }) async {
+  try {
+    final img_lib.Image convertedImage = convertCameraImage(cameraImage);
+
+    switch (format) {
+      case ImageFormat.jpeg:
+      // JPEG: Faster, smaller file size, slight quality loss
+        return Uint8List.fromList(img_lib.encodeJpg(
+          convertedImage,
+          quality: 90, // 0-100, higher means better quality
+        ));
+
+      case ImageFormat.png:
+      // PNG: Lossless, larger file size, slower
+        return Uint8List.fromList(img_lib.encodePng(
+          convertedImage,
+          level: 6, // Compression level 0-9 (default is 6)
+        ));
+
+      case ImageFormat.raw:
+      // Raw: Fastest, no compression
+        return Uint8List.fromList(convertedImage.getBytes());
+    }
+  } catch (e) {
+    throw Exception('Failed to convert camera image: $e');
+  }
+}
+
+/// Available image formats for conversion
+enum ImageFormat {
+  jpeg,  // Good balance of quality and size
+  png,   // Lossless but larger and slower
+  raw    // Fastest but largest size
 }

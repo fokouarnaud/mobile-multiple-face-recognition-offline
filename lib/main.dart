@@ -2,6 +2,7 @@ import 'dart:developer' as devtools show log;
 import 'package:camera/camera.dart';
 import 'package:computer/computer.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterface/ui/home_page.dart';
 import 'package:flutterface/ui/realtime/home_view.dart';
 import 'package:logging/logging.dart';
 
@@ -43,8 +44,8 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-     // home: const HomePage(title: 'FlutterFace Demo'),
-      home:  HomeView(),
+      //home: const HomePage(title: 'FlutterFace Demo'),
+     home:  HomeView(),
     );
   }
 }

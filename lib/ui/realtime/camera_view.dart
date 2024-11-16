@@ -1,9 +1,16 @@
+import 'dart:async';
+import 'dart:math' as math;
+import 'dart:typed_data' show Uint8List;
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-//import 'package:flutterface/services/realtime/tflite/classifier.dart';
+import 'package:flutterface/services/face_ml/face_detection/detection.dart';
+import 'package:flutterface/services/face_ml/face_ml_service.dart';
+//import 'package:flutterface/services/face_ml/face_ml_service.dart';
 import 'package:flutterface/services/realtime/tflite/recognition.dart';
 import 'package:flutterface/services/realtime/tflite/stats.dart';
 import 'package:flutterface/ui/realtime/camera_view_singleton.dart';
+import 'package:flutterface/utils/image_ml_util.dart';
 //import 'package:flutterface/utils/realtime/isolate_utils.dart';
 import 'package:flutterface/utils/snackbar_message.dart';
 
@@ -27,14 +34,23 @@ class CameraView extends StatefulWidget {
 }
 
 class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
+
+
+
   /// List of available cameras
   List<CameraDescription> cameras = [];
 
   /// Controller
-  CameraController? cameraController;
+  CameraController? _cameraController;
 
   /// true when inference is ongoing
-  late bool predicting;
+  bool predicting = false;
+
+  /// List of detected face locations in relative coordinates.
+  List<FaceDetectionRelative> faceDetectionResultsRelative = [];
+
+  /// List of detected face locations in absolute coordinates.
+  List<FaceDetectionAbsolute> faceDetectionResultsAbsolute = [];
 
   /// Instance of [Classifier]
   // late Classifier classifier;
@@ -50,49 +66,60 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   void initStateAsync() async {
     WidgetsBinding.instance.addObserver(this);
+    try {
+      /// Camera initialization
+      await _setupCameraController();
 
+      // Create an instance of classifier to load model and labels
+      //classifier = Classifier();
+      ///loads the Face ML model in the background
+      // unawaited(FaceMlService.instance.init());
+    } catch (e) {
+      // Store error message to show later
+      final errorMessage = 'Initialization Error: ${e.toString()}';
+      if (mounted) {
+        showResponseSnackbar(context, errorMessage);
+      }
+    }
     // Spawn a new isolate
     // isolateUtils = IsolateUtils();
     //await isolateUtils.start();
 
-    // Camera initialization
-    await _setupCameraController();
 
-    // Create an instance of classifier to load model and labels
-    //classifier = Classifier();
-
-    // Initially predicting = false
-    predicting = false;
   }
 
   /// Initializes the camera by setting [cameraController]
   Future<void> _setupCameraController() async {
     final List<CameraDescription> _cameras = await availableCameras();
     if (_cameras.isNotEmpty) {
-      setState(() {
-        cameras = _cameras;
-        cameraController = CameraController(
-          _cameras.first,
-          ResolutionPreset.low,
-          enableAudio: false,
-        );
-      });
 
-      await cameraController?.initialize().then((_) async {
+        _cameraController = CameraController(
+          _cameras[1],
+          ResolutionPreset.low, // Instead of ResolutionPreset.low,
+          enableAudio: false,
+          imageFormatGroup: ImageFormatGroup.bgra8888, // Optimize for processing
+        );
+
+
+      await _cameraController?.initialize().then((_) async {
+
+        if (!mounted) {
+          return;
+        }
         // Stream of image passed to [onLatestImageAvailable] callback
-        await cameraController?.startImageStream(onLatestImageAvailable);
+        await _cameraController?.startImageStream(onLatestImageAvailable);
 
         /// previewSize is size of each image frame captured by controller
         ///
         /// 352x288 on iOS, 240p (320x240) on Android with ResolutionPreset.low
-        Size? previewSize = cameraController?.value.previewSize;
+        final Size? previewSize = _cameraController?.value.previewSize;
 
         /// previewSize is size of raw input image to the model
         CameraViewSingleton.inputImageSize = previewSize!;
 
         // the display width of image on screen is
         // same as screenWidth while maintaining the aspectRatio
-        Size screenSize = MediaQuery.of(context).size;
+        final Size screenSize = MediaQuery.of(context).size;
         CameraViewSingleton.screenSize = screenSize;
         CameraViewSingleton.ratio = screenSize.width / previewSize.height;
         setState(() {});
@@ -114,78 +141,112 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     // Return empty container while the camera is not initialized
-    if (cameraController == null ||
-        cameraController?.value.isInitialized == false) {
+    if (_cameraController == null ||
+        _cameraController?.value.isInitialized == false) {
       return const Center(
-        child:CircularProgressIndicator(),
+        child: CircularProgressIndicator(),
       );
     }
+    /*
+     return AspectRatio(
+       aspectRatio: cameraController!.value.aspectRatio,
+      child: CameraPreview(
+        cameraController!,
+      ),
+    );
 
-   // return AspectRatio(
-   //   aspectRatio: cameraController!.value.aspectRatio,
-    //  child: CameraPreview(
-    //    cameraController!,
-    //  ),
-    //);
-    return AspectRatio(
-      aspectRatio: 1,
+     */
+
+  return AspectRatio(
+      aspectRatio:  _cameraController!.value.aspectRatio ,
       child: ClipRect(
         child: FittedBox(
           fit: BoxFit.cover,
           child: SizedBox(
-            width: cameraController!.value.previewSize!.height,
-            height: cameraController!.value.previewSize!.width,
-            child: CameraPreview(cameraController!),
+            width: _cameraController!.value.previewSize!.height,
+            height: _cameraController!.value.previewSize!.width,
+            child: Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.rotationY(math.pi),
+              child: CameraPreview(_cameraController!),
+            ),
           ),
         ),
       ),
     );
+
+
+
   }
+
 
   /// Callback to receive each frame [CameraImage] perform inference on it
-  onLatestImageAvailable(CameraImage cameraImage) async {
-    showResponseSnackbar(context, 'TODO:classifier');
+  Future onLatestImageAvailable(CameraImage cameraImage) async {
+    if (predicting) return;
 
-    ///todo:foreach frame process
-    /* if (classifier.interpreter != null && classifier.labels != null) {
-      // If previous inference has not completed then return
-      if (predicting) {
-        return;
-      }
+    setState(() {
+      predicting = true;
+    });
 
-      setState(() {
-        predicting = true;
-      });
-
-      var uiThreadTimeStart = DateTime.now().millisecondsSinceEpoch;
+    try {
+      //showResponseSnackbar(context, 'TODO:classifier');
+      final uiThreadTimeStart = DateTime.now().millisecondsSinceEpoch;
 
       // Data to be passed to inference isolate
-      var isolateData = IsolateData(
-          cameraImage, classifier.interpreter.address, classifier.labels);
+      //final resultaOne = convertCameraImage(cameraImage);
+     // final resultTwo = resultaOne.buffer;
 
-      // We could have simply used the compute method as well however
-      // it would be as in-efficient as we need to continuously passing data
-      // to another isolate.
+    final Uint8List imageOriginalData = await cameraImageToUint8List(cameraImage);
 
-      /// perform inference in separate isolate
-      Map<String, dynamic> inferenceResults = await inference(isolateData);
+    faceDetectionResultsRelative =
+        await FaceMlService.instance.detectFaces(imageOriginalData!);
+    final imageSize = Size(
+      _cameraController!.value.previewSize!.width.toDouble(),
+      _cameraController!.value.previewSize!.height.toDouble(),
+    );
+    faceDetectionResultsAbsolute = relativeToAbsoluteDetections(
+      relativeDetections: faceDetectionResultsRelative,
+      imageWidth: imageSize.width.round(),
+      imageHeight: imageSize.height.round(),
+    );
 
-      var uiThreadInferenceElapsedTime =
+      final uiThreadInferenceElapsedTime =
           DateTime.now().millisecondsSinceEpoch - uiThreadTimeStart;
 
+      //final List<Recognition> recognitionsResults =
+      //    faceDetectionResultsAbsolute.map((e) => e.toRecognition()).toList();
+
       // pass results to HomeView
-      widget.resultsCallback(inferenceResults["recognitions"]);
+      //widget.resultsCallback(recognitionsResults);
 
       // pass stats to HomeView
-      widget.statsCallback((inferenceResults["stats"] as Stats)
-        ..totalElapsedTime = uiThreadInferenceElapsedTime);
+      widget.statsCallback(
+           Stats(
+            preProcessingTime: 0,
+            inferenceTime: 0,
+            totalPredictTime: 0,
+            totalElapsedTime: 0,
+          )..totalElapsedTime = uiThreadInferenceElapsedTime,
+        //  imageOriginalData
+      );
 
-      // set predicting to false to allow new frames
-      setState(() {
-        predicting = false;
-      });
-    }*/
+    } catch (e) {
+      final errorMessage = 'Inference Error: ${e.toString()}';
+      // Only show Snackbar if mounted
+      if (mounted) {
+        showResponseSnackbar(context, errorMessage);
+      }
+    } finally {
+      // Reset predicting flag regardless of success or failure
+      if (mounted) {
+        setState(() {
+          predicting = false;
+        });
+      }
+    }
+
   }
+
 
   /// Runs inference in another isolate
   /* Future<Map<String, dynamic>> inference(IsolateData isolateData) async {
@@ -196,6 +257,8 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     return results;
   }*/
 
+
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     // App state changed before we got the chance to initialize.
@@ -205,11 +268,11 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
       //  await cameraController.dispose();
       //  break;
       case AppLifecycleState.paused:
-        await cameraController?.stopImageStream();
+        await _cameraController?.stopImageStream();
         break;
       case AppLifecycleState.resumed:
-        if (cameraController?.value.isStreamingImages == false) {
-          await cameraController?.startImageStream(onLatestImageAvailable);
+        if (_cameraController?.value.isStreamingImages == false) {
+          await _cameraController?.startImageStream(onLatestImageAvailable);
         }
         break;
       default:
@@ -218,8 +281,10 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+
+    // Cancel any active timers or listeners
+    _cameraController?.dispose();
     WidgetsBinding.instance.removeObserver(this);
-    cameraController?.dispose();
     super.dispose();
   }
 }

@@ -1,8 +1,10 @@
 import 'dart:convert' show utf8;
 import 'dart:math' show max, min, pow, sqrt;
-import 'dart:ui' show Size;
+import 'dart:ui' show Offset, Size;
+
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutterface/services/face_ml/face_alignment/alignment_result.dart';
+import 'package:flutterface/services/realtime/tflite/recognition.dart';
 
 enum FaceDirection { left, right, straight }
 
@@ -29,6 +31,7 @@ abstract class Detection {
   const Detection.empty() : score = 0;
 
   get width;
+
   get height;
 
   @override
@@ -45,14 +48,14 @@ extension BBoxExtension on List<double> {
     this[3] = this[1] + heightRounded;
   }
 
-  // double get xMinBox =>
-  //     isNotEmpty ? this[0] : throw IndexError.withLength(0, length);
-  // double get yMinBox =>
-  //     length >= 2 ? this[1] : throw IndexError.withLength(1, length);
-  // double get xMaxBox =>
-  //     length >= 3 ? this[2] : throw IndexError.withLength(2, length);
-  // double get yMaxBox =>
-  //     length >= 4 ? this[3] : throw IndexError.withLength(3, length);
+// double get xMinBox =>
+//     isNotEmpty ? this[0] : throw IndexError.withLength(0, length);
+// double get yMinBox =>
+//     length >= 2 ? this[1] : throw IndexError.withLength(1, length);
+// double get xMaxBox =>
+//     length >= 3 ? this[2] : throw IndexError.withLength(2, length);
+// double get yMaxBox =>
+//     length >= 4 ? this[3] : throw IndexError.withLength(3, length);
 }
 
 /// This class represents a face detection with relative coordinates in the range [0, 1].
@@ -70,14 +73,21 @@ class FaceDetectionRelative extends Detection {
   final List<List<double>> allKeypoints;
 
   double get xMinBox => box[0];
+
   double get yMinBox => box[1];
+
   double get xMaxBox => box[2];
+
   double get yMaxBox => box[3];
 
   List<double> get leftEye => allKeypoints[0];
+
   List<double> get rightEye => allKeypoints[1];
+
   List<double> get nose => allKeypoints[2];
+
   List<double> get leftMouth => allKeypoints[3];
+
   List<double> get rightMouth => allKeypoints[4];
 
   FaceDetectionRelative({
@@ -158,7 +168,8 @@ class FaceDetectionRelative extends Detection {
   }
 
   void transformRelativeToOriginalImage(
-    List<double> fromBox, // [xMin, yMin, xMax, yMax]
+    List<double> fromBox,
+    // [xMin, yMin, xMax, yMax]
     List<double> toBox, // [xMin, yMin, xMax, yMax]
   ) {
     // Return if all elements of fromBox and toBox are equal
@@ -350,6 +361,7 @@ class FaceDetectionRelative extends Detection {
 
   /// The width of the bounding box of the face detection, in relative range [0, 1].
   double get width => xMaxBox - xMinBox;
+
   @override
 
   /// The height of the bounding box of the face detection, in relative range [0, 1].
@@ -371,14 +383,21 @@ class FaceDetectionAbsolute extends Detection {
   final List<List<double>> allKeypoints;
 
   double get xMinBox => box[0];
+
   double get yMinBox => box[1];
+
   double get xMaxBox => box[2];
+
   double get yMaxBox => box[3];
 
   List<double> get leftEye => allKeypoints[0];
+
   List<double> get rightEye => allKeypoints[1];
+
   List<double> get nose => allKeypoints[2];
+
   List<double> get leftMouth => allKeypoints[3];
+
   List<double> get rightMouth => allKeypoints[4];
 
   FaceDetectionAbsolute({
@@ -441,6 +460,7 @@ class FaceDetectionAbsolute extends Detection {
 
   /// The width of the bounding box of the face detection, in number of pixels, range [0, imageWidth].
   double get width => xMaxBox - xMinBox;
+
   @override
 
   /// The height of the bounding box of the face detection, in number of pixels, range [0, imageHeight].
@@ -475,6 +495,22 @@ class FaceDetectionAbsolute extends Detection {
     }
 
     return FaceDirection.straight;
+  }
+
+  Recognition toRecognition() {
+    final scoreCopy = score;
+    final boxCopy = List<double>.from(box, growable: false);
+    final allKeypointsCopy = allKeypoints
+        .map((sublist) => List<double>.from(sublist, growable: false))
+        .toList();
+
+    // final intKeypoints =
+    //     allKeypointsCopy.map((e) => e.map((e) => e.toInt()).toList()).toList();
+    return Recognition(
+        id: 0,
+        label: "",
+        score: score,
+        location: Offset(xMinBox, yMinBox) & Size(width, height),);
   }
 }
 
