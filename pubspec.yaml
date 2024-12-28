@@ -13,17 +13,17 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.2
-  camera: ^0.11.0+2
   image_picker: ^1.1.2
-  tflite_flutter: #^0.10.1
-    git:
-      url: https://github.com/tensorflow/flutter-tflite.git
-      ref: main
+  tflite_flutter: ^0.11.0
+  #tflite_flutter: #^0.10.1
+  #  git:
+  #    url: https://github.com/tensorflow/flutter-tflite.git
+  #    ref: main
   # tflite_flutter_helper: # Use this instead: https://github.com/tensorflow/flutter-tflite/tree/main/example/image_classification_mobilenet
   #   git:
   #     url: https://github.com/pnyompen/tflite_flutter_helper.git
   #     ref: 43e87d4b9627539266dc20250beb35bf36320dce
-  # camera: ^0.10.5+2
+  camera: ^0.11.0+2
   # get_it: ^7.6.0
   equatable: ^2.0.5
   ml_linalg: ^13.11.31
@@ -41,7 +41,7 @@ dependencies:
       ref: isolates
   computer:
     git: "https://github.com/ente-io/computer.git"
-  image: ^4.2.0
+  image: ^4.1.7
 
 dev_dependencies:
   flutter_test:

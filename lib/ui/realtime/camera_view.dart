@@ -34,9 +34,6 @@ class CameraView extends StatefulWidget {
 }
 
 class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
-
-
-
   /// List of available cameras
   List<CameraDescription> cameras = [];
 
@@ -84,25 +81,20 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     // Spawn a new isolate
     // isolateUtils = IsolateUtils();
     //await isolateUtils.start();
-
-
   }
 
   /// Initializes the camera by setting [cameraController]
   Future<void> _setupCameraController() async {
     final List<CameraDescription> _cameras = await availableCameras();
     if (_cameras.isNotEmpty) {
-
-        _cameraController = CameraController(
-          _cameras[1],
-          ResolutionPreset.low, // Instead of ResolutionPreset.low,
-          enableAudio: false,
-          imageFormatGroup: ImageFormatGroup.bgra8888, // Optimize for processing
-        );
-
+      _cameraController = CameraController(
+        _cameras[1],
+        ResolutionPreset.low, // Instead of ResolutionPreset.low,
+        enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.bgra8888, // Optimize for processing
+      );
 
       await _cameraController?.initialize().then((_) async {
-
         if (!mounted) {
           return;
         }
@@ -157,8 +149,8 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
      */
 
-  return AspectRatio(
-      aspectRatio:  _cameraController!.value.aspectRatio ,
+    return AspectRatio(
+      aspectRatio: _cameraController!.value.aspectRatio,
       child: ClipRect(
         child: FittedBox(
           fit: BoxFit.cover,
@@ -174,11 +166,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
         ),
       ),
     );
-
-
-
   }
-
 
   /// Callback to receive each frame [CameraImage] perform inference on it
   Future onLatestImageAvailable(CameraImage cameraImage) async {
@@ -194,21 +182,28 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
       // Data to be passed to inference isolate
       //final resultaOne = convertCameraImage(cameraImage);
-     // final resultTwo = resultaOne.buffer;
+      // final resultTwo = resultaOne.buffer;
 
-    final Uint8List imageOriginalData = await cameraImageToUint8List(cameraImage);
+      final Uint8List? rawPixels =
+          cameraImageToUint8List(cameraImage); // Your raw RGB data
 
-    faceDetectionResultsRelative =
-        await FaceMlService.instance.detectFaces(imageOriginalData!);
-    final imageSize = Size(
-      _cameraController!.value.previewSize!.width.toDouble(),
-      _cameraController!.value.previewSize!.height.toDouble(),
-    );
-    faceDetectionResultsAbsolute = relativeToAbsoluteDetections(
-      relativeDetections: faceDetectionResultsRelative,
-      imageWidth: imageSize.width.round(),
-      imageHeight: imageSize.height.round(),
-    );
+      final Uint8List imageOriginalData = encodeRawToPng(
+        rawPixels!,
+        cameraImage.width,
+        cameraImage.height,
+      );
+
+      faceDetectionResultsRelative =
+          await FaceMlService.instance.detectFaces(imageOriginalData!);
+      final imageSize = Size(
+        _cameraController!.value.previewSize!.width.toDouble(),
+        _cameraController!.value.previewSize!.height.toDouble(),
+      );
+      faceDetectionResultsAbsolute = relativeToAbsoluteDetections(
+        relativeDetections: faceDetectionResultsRelative,
+        imageWidth: imageSize.width.round(),
+        imageHeight: imageSize.height.round(),
+      );
 
       final uiThreadInferenceElapsedTime =
           DateTime.now().millisecondsSinceEpoch - uiThreadTimeStart;
@@ -221,15 +216,14 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
       // pass stats to HomeView
       widget.statsCallback(
-           Stats(
-            preProcessingTime: 0,
-            inferenceTime: 0,
-            totalPredictTime: 0,
-            totalElapsedTime: 0,
-          )..totalElapsedTime = uiThreadInferenceElapsedTime,
+        Stats(
+          preProcessingTime: 0,
+          inferenceTime: 0,
+          totalPredictTime: 0,
+          totalElapsedTime: 0,
+        )..totalElapsedTime = uiThreadInferenceElapsedTime,
         //  imageOriginalData
       );
-
     } catch (e) {
       final errorMessage = 'Inference Error: ${e.toString()}';
       // Only show Snackbar if mounted
@@ -244,9 +238,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
         });
       }
     }
-
   }
-
 
   /// Runs inference in another isolate
   /* Future<Map<String, dynamic>> inference(IsolateData isolateData) async {
@@ -256,8 +248,6 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     var results = await responsePort.first;
     return results;
   }*/
-
-
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) async {
@@ -281,7 +271,6 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-
     // Cancel any active timers or listeners
     _cameraController?.dispose();
     WidgetsBinding.instance.removeObserver(this);

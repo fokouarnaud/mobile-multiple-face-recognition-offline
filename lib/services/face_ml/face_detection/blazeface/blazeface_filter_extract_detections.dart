@@ -1,8 +1,8 @@
 import 'dart:math' as math show exp;
 
 import 'package:flutterface/services/face_ml/face_detection/blazeface/blazeface_anchors.dart';
-import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 import 'package:flutterface/services/face_ml/face_detection/blazeface/blazeface_face_detection_options.dart';
+import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 
 List<FaceDetectionRelative> filterExtractDetectionsBlazeFace({
   required FaceDetectionOptionsBlazeFace options,

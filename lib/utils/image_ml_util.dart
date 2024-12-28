@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:developer' show log;
 import 'dart:math' show min, max;
-import 'dart:typed_data' show ByteData, Float32List, Uint8List;
+import 'dart:typed_data' show ByteBuffer, ByteData, Float32List, Uint8List;
 import 'dart:ui';
 
 import 'package:camera/camera.dart';
@@ -1721,120 +1721,98 @@ int bilinearInterpolation(
       .round();
 }
 
-//// Converts a [CameraImage] to [img_lib.Image] in RGB format
-/// Supports YUV420 and BGRA8888 formats
-img_lib.Image convertCameraImage(CameraImage cameraImage) {
-  switch (cameraImage.format.group) {
-    case ImageFormatGroup.yuv420:
-      return convertYUV420ToImage(cameraImage);
-    case ImageFormatGroup.bgra8888:
-      return convertBGRA8888ToImage(cameraImage);
-    default:
-      throw Exception('Unsupported image format: ${cameraImage.format.group}');
+Uint8List? cameraImageToUint8List(CameraImage cameraImage) {
+  if (cameraImage.format.group == ImageFormatGroup.yuv420) {
+    return yuv420ToUint8List(cameraImage);
+  } else if (cameraImage.format.group == ImageFormatGroup.bgra8888) {
+    return bgra8888ToUint8List(cameraImage);
+  } else {
+    throw UnsupportedError('Format non supporté : ${cameraImage.format.group}');
   }
 }
 
-/// Converts a [CameraImage] in BGRA8888 format to [img_lib.Image] in RGB format
-img_lib.Image convertBGRA8888ToImage(CameraImage cameraImage) {
-  final plane = cameraImage.planes[0];
-
-  return img_lib.Image.fromBytes(
-    width: cameraImage.width,
-    height: cameraImage.height,
-    bytes: plane.bytes.buffer,
-    rowStride: plane.bytesPerRow,
-    bytesOffset: plane.bytesPerRow - (cameraImage.width * 4), // Corrected offset calculation
-    order: img_lib.ChannelOrder.bgra,
-  );
-}
-
-/// Converts a [CameraImage] in YUV420 format to [img_lib.Image] in RGB format
-img_lib.Image convertYUV420ToImage(CameraImage cameraImage) {
+Uint8List yuv420ToUint8List(CameraImage cameraImage) {
   final int width = cameraImage.width;
   final int height = cameraImage.height;
 
-  final yBuffer = cameraImage.planes[0].bytes;
-  final uBuffer = cameraImage.planes[1].bytes;
-  final vBuffer = cameraImage.planes[2].bytes;
+  // Les trois plans de YUV420
+  final Uint8List yPlane = cameraImage.planes[0].bytes;
+  final Uint8List uPlane = cameraImage.planes[1].bytes;
+  final Uint8List vPlane = cameraImage.planes[2].bytes;
 
-  final int yRowStride = cameraImage.planes[0].bytesPerRow;
-  final int yPixelStride = cameraImage.planes[0].bytesPerPixel!;
+  // Matrice de pixels RVB
+  final Uint8List rgbBuffer = Uint8List(width * height * 3);
 
-  final int uvRowStride = cameraImage.planes[1].bytesPerRow;
-  final int uvPixelStride = cameraImage.planes[1].bytesPerPixel!;
-
-  // Create image with correct dimensions
-  final image = img_lib.Image(width: width, height: height);
-
-  // YUV420 to RGB conversion
+  int pixelIndex = 0;
   for (int y = 0; y < height; y++) {
-    int uvY = (y / 2).floor();
-
     for (int x = 0; x < width; x++) {
-      int uvX = (x / 2).floor();
+      final int yIndex = y * width + x;
 
-      final yIndex = (y * yRowStride) + (x * yPixelStride);
-      final uvIndex = (uvY * uvRowStride) + (uvX * uvPixelStride);
+      // Index dans les plans U et V (qui sont downsampled)
+      final int uvIndex = (y ~/ 2) * (width ~/ 2) + (x ~/ 2);
 
-      // YUV values
-      final int yValue = yBuffer[yIndex];
-      final int uValue = uBuffer[uvIndex];
-      final int vValue = vBuffer[uvIndex];
+      final int yValue = yPlane[yIndex];
+      final int uValue = uPlane[uvIndex] - 128;
+      final int vValue = vPlane[uvIndex] - 128;
 
-      // Convert YUV to RGB using BT.601 conversion
-      int r = (yValue + (1.370705 * (vValue - 128))).round();
-      int g = (yValue - (0.337633 * (uValue - 128)) - (0.698001 * (vValue - 128))).round();
-      int b = (yValue + (1.732446 * (uValue - 128))).round();
+      // Conversion en RGB
+      int r = (yValue + 1.402 * vValue).round();
+      int g = (yValue - 0.344 * uValue - 0.714 * vValue).round();
+      int b = (yValue + 1.772 * uValue).round();
 
-      // Clamp RGB values
+      // Clamp entre 0 et 255
       r = r.clamp(0, 255);
       g = g.clamp(0, 255);
       b = b.clamp(0, 255);
 
-      image.setPixelRgb(x, y, r, g, b);
+      rgbBuffer[pixelIndex++] = r;
+      rgbBuffer[pixelIndex++] = g;
+      rgbBuffer[pixelIndex++] = b;
     }
   }
-
-  return image;
+  return rgbBuffer;
 }
 
+Uint8List bgra8888ToUint8List(CameraImage cameraImage) {
+  final int width = cameraImage.width;
+  final int height = cameraImage.height;
 
-/// Converts CameraImage to Uint8List with configurable format
-/// Supports PNG (lossless) and JPEG (lossy) formats
-Future<Uint8List> cameraImageToUint8List(
-    CameraImage cameraImage, {
-      ImageFormat format = ImageFormat.jpeg,
-    }) async {
-  try {
-    final img_lib.Image convertedImage = convertCameraImage(cameraImage);
+  // Copie directe du plan unique
+  final Uint8List bgraPlane = cameraImage.planes[0].bytes;
 
-    switch (format) {
-      case ImageFormat.jpeg:
-      // JPEG: Faster, smaller file size, slight quality loss
-        return Uint8List.fromList(img_lib.encodeJpg(
-          convertedImage,
-          quality: 90, // 0-100, higher means better quality
-        ));
-
-      case ImageFormat.png:
-      // PNG: Lossless, larger file size, slower
-        return Uint8List.fromList(img_lib.encodePng(
-          convertedImage,
-          level: 6, // Compression level 0-9 (default is 6)
-        ));
-
-      case ImageFormat.raw:
-      // Raw: Fastest, no compression
-        return Uint8List.fromList(convertedImage.getBytes());
-    }
-  } catch (e) {
-    throw Exception('Failed to convert camera image: $e');
+  // Conversion BGRA8888 -> RGBA pour plus de standardisation
+  final Uint8List rgbaBuffer = Uint8List(width * height * 4);
+  for (int i = 0; i < bgraPlane.length; i += 4) {
+    rgbaBuffer[i] = bgraPlane[i + 2];     // R
+    rgbaBuffer[i + 1] = bgraPlane[i + 1]; // G
+    rgbaBuffer[i + 2] = bgraPlane[i];     // B
+    rgbaBuffer[i + 3] = bgraPlane[i + 3]; // A
   }
+  return rgbaBuffer;
+}
+/// Encodes raw RGB data to a PNG format.
+Uint8List encodeRawToPng(Uint8List rawPixels, int width, int height) {
+  // Create an image object from the raw pixels
+  final img_lib.Image image = img_lib.Image.fromBytes(
+    width: width,
+    height: height,
+    bytes: rawPixels.buffer,
+    numChannels: 3, // 3 for RGB
+  );
+
+  // Encode the image to PNG format
+  return Uint8List.fromList(img_lib.encodePng(image));
 }
 
-/// Available image formats for conversion
-enum ImageFormat {
-  jpeg,  // Good balance of quality and size
-  png,   // Lossless but larger and slower
-  raw    // Fastest but largest size
+/// Encodes raw RGB or RGBA data to a JPEG format.
+Uint8List encodeRawToJpeg(Uint8List rawPixels, int width, int height, {int quality = 90}) {
+  final img_lib.Image image = img_lib.Image.fromBytes(
+    width: width,
+    height: height,
+    bytes: rawPixels.buffer,
+    numChannels: 3, // 3 for RGB
+  );
+
+  // Encode the image to JPEG format
+  return Uint8List.fromList(img_lib.encodeJpg(image, quality: quality));
 }

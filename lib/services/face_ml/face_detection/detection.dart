@@ -91,7 +91,7 @@ class FaceDetectionRelative extends Detection {
   List<double> get rightMouth => allKeypoints[4];
 
   FaceDetectionRelative({
-    required double score,
+    required super.score,
     required List<double> box,
     required List<List<double>> allKeypoints,
   })  : assert(
@@ -109,8 +109,7 @@ class FaceDetectionRelative extends Detection {
               (sublist) =>
                   List<double>.from(sublist.map((e) => e.clamp(0.0, 1.0))),
             )
-            .toList(),
-        super(score: score);
+            .toList();
 
   factory FaceDetectionRelative.zero() {
     return FaceDetectionRelative(
