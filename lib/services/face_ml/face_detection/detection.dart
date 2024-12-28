@@ -4,7 +4,7 @@ import 'dart:ui' show Offset, Size;
 
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutterface/services/face_ml/face_alignment/alignment_result.dart';
-import 'package:flutterface/services/realtime/tflite/recognition.dart';
+
 
 enum FaceDirection { left, right, straight }
 
@@ -496,21 +496,6 @@ class FaceDetectionAbsolute extends Detection {
     return FaceDirection.straight;
   }
 
-  Recognition toRecognition() {
-    final scoreCopy = score;
-    final boxCopy = List<double>.from(box, growable: false);
-    final allKeypointsCopy = allKeypoints
-        .map((sublist) => List<double>.from(sublist, growable: false))
-        .toList();
-
-    // final intKeypoints =
-    //     allKeypointsCopy.map((e) => e.map((e) => e.toInt()).toList()).toList();
-    return Recognition(
-        id: 0,
-        label: "",
-        score: score,
-        location: Offset(xMinBox, yMinBox) & Size(width, height),);
-  }
 }
 
 List<FaceDetectionAbsolute> relativeToAbsoluteDetections({
