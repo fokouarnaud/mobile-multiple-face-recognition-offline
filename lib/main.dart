@@ -1,9 +1,7 @@
 import 'dart:developer' as devtools show log;
-import 'package:camera/camera.dart';
 import 'package:computer/computer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutterface/ui/home_page.dart';
-import 'package:flutterface/ui/realtime/home_view.dart';
 import 'package:logging/logging.dart';
 
 
@@ -24,7 +22,7 @@ void main() async {
 
 
   await Computer.shared().turnOn(workersCount: 2);
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 /// The main application widget.
