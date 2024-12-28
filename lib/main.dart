@@ -1,7 +1,7 @@
 import 'dart:developer' as devtools show log;
 import 'package:computer/computer.dart';
 import 'package:flutter/material.dart';
-import 'package:flutterface/ui/home_page.dart';
+import 'package:flutterface/ui/home/home_page.dart';
 import 'package:logging/logging.dart';
 
 
@@ -43,7 +43,6 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const HomePage(title: 'FlutterFace Demo'),
-    // home:  HomeView(),
     );
   }
 }
