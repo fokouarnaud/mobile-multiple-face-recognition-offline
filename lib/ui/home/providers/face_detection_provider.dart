@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 import 'package:flutterface/services/face_ml/face_ml_service.dart';
+import 'package:flutterface/services/snackbar/snackbar_service.dart';
 import 'package:image_picker/image_picker.dart';
 
 class FaceDetectionProvider extends ChangeNotifier {
   final ImagePicker _picker = ImagePicker();
   final FaceMlService _faceMlService = FaceMlService.instance;
+  final _snackbarService = SnackbarService.instance;
 
   // State variables
   Image? imageOriginal;
@@ -42,6 +44,7 @@ class FaceDetectionProvider extends ChangeNotifier {
 
   // Methods
   Future<void> pickImage(bool fromCamera) async {
+    _resetState();
     final XFile? image = fromCamera
         ? await _picker.pickImage(source: ImageSource.camera)
         : await _picker.pickImage(source: ImageSource.gallery);
@@ -52,24 +55,31 @@ class FaceDetectionProvider extends ChangeNotifier {
   }
 
   Future<void> pickStockImage() async {
+    _resetState();
     final byteData = await rootBundle.load(_stockImagePaths[stockImageCounter]);
     imageOriginalData = byteData.buffer.asUint8List();
     final decodedImage = await decodeImageFromList(imageOriginalData!);
-
     imageOriginal = Image.asset(_stockImagePaths[stockImageCounter]);
-    imageSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
+    imageSize =
+        Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
     stockImageCounter = (stockImageCounter + 1) % _stockImagePaths.length;
-    _resetState();
     notifyListeners();
   }
 
   Future<void> _processImage(XFile image) async {
     imageOriginalData = await image.readAsBytes();
-    final decodedImage = await decodeImageFromList(imageOriginalData!);
 
+    final stopwatchImageDecoding = Stopwatch()..start();
+    final decodedImage = await decodeImageFromList(imageOriginalData!);
     imageOriginal = Image.file(File(image.path));
-    imageSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
-    _resetState();
+    stopwatchImageDecoding.stop();
+
+    devtools.log(
+      'Image decoding took ${stopwatchImageDecoding.elapsedMilliseconds} ms',
+    );
+    imageSize =
+        Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
+
     notifyListeners();
   }
 
@@ -79,9 +89,9 @@ class FaceDetectionProvider extends ChangeNotifier {
     isAligned = false;
     isEmbedded = false;
     faceFocusCounter = 0;
-    faceDetectionResultsRelative.clear();
-    faceDetectionResultsAbsolute.clear();
-    faceEmbeddingResult.clear();
+    faceDetectionResultsRelative=[];
+    faceDetectionResultsAbsolute=[];
+    faceEmbeddingResult=[];
     embeddingStartIndex = 0;
   }
 
@@ -91,13 +101,19 @@ class FaceDetectionProvider extends ChangeNotifier {
   }
 
   Future<void> detectFaces() async {
-    if (imageOriginalData == null || isAnalyzed || isPredicting) return;
+    if (imageOriginalData == null) {
+      _snackbarService.showError('Please select an image first');
+      return;
+    }
+    if (isAnalyzed || isPredicting) {
+      return;
+    }
 
     isPredicting = true;
     notifyListeners();
 
     faceDetectionResultsRelative =
-    await _faceMlService.detectFaces(imageOriginalData!);
+        await _faceMlService.detectFaces(imageOriginalData!);
 
     faceDetectionResultsAbsolute = relativeToAbsoluteDetections(
       relativeDetections: faceDetectionResultsRelative,
@@ -123,8 +139,10 @@ class FaceDetectionProvider extends ChangeNotifier {
 
     final face = faceDetectionResultsAbsolute[faceFocusCounter];
     try {
-      final bothFaces = await _faceMlService
-          .alignSingleFaceCustomInterpolation(imageOriginalData!, face);
+      final bothFaces = await _faceMlService.alignSingleFaceCustomInterpolation(
+        imageOriginalData!,
+        face,
+      );
       faceAlignedData = bothFaces[0];
       faceAlignedData2 = bothFaces[1];
 
@@ -134,7 +152,8 @@ class FaceDetectionProvider extends ChangeNotifier {
       faceEmbeddingResult.clear();
       embeddingStartIndex = 0;
       isEmbedded = false;
-      faceFocusCounter = (faceFocusCounter + 1) % faceDetectionResultsAbsolute.length;
+      faceFocusCounter =
+          (faceFocusCounter + 1) % faceDetectionResultsAbsolute.length;
 
       notifyListeners();
     } catch (e) {
@@ -150,7 +169,7 @@ class FaceDetectionProvider extends ChangeNotifier {
 
     try {
       final (embeddingResult, isBlurLocal, blurValueLocal) =
-      await _faceMlService.embedSingleFace(
+          await _faceMlService.embedSingleFace(
         imageOriginalData!,
         faceDetectionResultsRelative[faceFocusCounter],
       );
@@ -169,12 +188,14 @@ class FaceDetectionProvider extends ChangeNotifier {
   }
 
   void nextEmbedding() {
-    embeddingStartIndex = (embeddingStartIndex + 2) % faceEmbeddingResult.length;
+    embeddingStartIndex =
+        (embeddingStartIndex + 2) % faceEmbeddingResult.length;
     notifyListeners();
   }
 
   void prevEmbedding() {
-    embeddingStartIndex = (embeddingStartIndex - 2) % faceEmbeddingResult.length;
+    embeddingStartIndex =
+        (embeddingStartIndex - 2) % faceEmbeddingResult.length;
     notifyListeners();
   }
 }

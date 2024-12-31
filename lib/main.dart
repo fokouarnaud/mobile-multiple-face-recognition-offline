@@ -1,6 +1,7 @@
 import 'dart:developer' as devtools show log;
 import 'package:computer/computer.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterface/services/snackbar/snackbar_service.dart';
 import 'package:flutterface/ui/home/home_page.dart';
 import 'package:logging/logging.dart';
 
@@ -42,6 +43,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
+      scaffoldMessengerKey: SnackbarService.instance.scaffoldMessengerKey,
       home: const HomePage(title: 'FlutterFace Demo'),
     );
   }

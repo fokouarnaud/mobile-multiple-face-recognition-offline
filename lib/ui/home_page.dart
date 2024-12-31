@@ -129,7 +129,7 @@ class _HomePageState extends State<HomePage> {
     });
 
     faceDetectionResultsRelative =
-    await FaceMlService.instance.detectFaces(imageOriginalData!);
+        await FaceMlService.instance.detectFaces(imageOriginalData!);
 
     faceDetectionResultsAbsolute = relativeToAbsoluteDetections(
       relativeDetections: faceDetectionResultsRelative,
@@ -275,7 +275,7 @@ class _HomePageState extends State<HomePage> {
     });
 
     final (faceEmbeddingResultLocal, isBlurLocal, blurValueLocal) =
-    await FaceMlService.instance.embedSingleFace(
+        await FaceMlService.instance.embedSingleFace(
       imageOriginalData!,
       faceDetectionResultsRelative[showingFaceCounter],
     );
@@ -334,51 +334,51 @@ class _HomePageState extends State<HomePage> {
                   Center(
                     child: imageOriginal != null
                         ? isAligned
-                        ? Center(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Column(
-                            children: [
-                              faceAligned!,
-                              const Text(
-                                'Bilinear',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: 10),
-                          Column(
-                            children: [
-                              faceAligned2!,
-                              const Text(
-                                'Bicubic',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    )
-                        : Stack(
-                      children: [
-                        imageOriginal!,
-                        if (isAnalyzed)
-                          CustomPaint(
-                            painter: FacePainter(
-                              faceDetections:
-                              faceDetectionResultsAbsolute,
-                              imageSize: imageSize,
-                              availableSize: imageDisplaySize,
-                            ),
-                          ),
-                      ],
-                    )
+                            ? Center(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Column(
+                                      children: [
+                                        faceAligned!,
+                                        const Text(
+                                          'Bilinear',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Column(
+                                      children: [
+                                        faceAligned2!,
+                                        const Text(
+                                          'Bicubic',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : Stack(
+                                children: [
+                                  imageOriginal!,
+                                  if (isAnalyzed)
+                                    CustomPaint(
+                                      painter: FacePainter(
+                                        faceDetections:
+                                            faceDetectionResultsAbsolute,
+                                        imageSize: imageSize,
+                                        availableSize: imageDisplaySize,
+                                      ),
+                                    ),
+                                ],
+                              )
                         : const Text(
-                      'No image selected',
-                      style: TextStyle(color: Colors.white),
-                    ),
+                            'No image selected',
+                            style: TextStyle(color: Colors.white),
+                          ),
                   ),
                   Padding(
                     padding: const EdgeInsets.all(8.0),
@@ -395,7 +395,7 @@ class _HomePageState extends State<HomePage> {
                             'Gallery',
                             style: TextStyle(color: Colors.black, fontSize: 10),
                           ),
-                          onPressed: ()=>_pickImage(fromCamera: false),
+                          onPressed: () => _pickImage(fromCamera: false),
                           style: ElevatedButton.styleFrom(
                             minimumSize: const Size(50, 30),
                             backgroundColor: Colors.grey[200], // Button color
@@ -450,30 +450,30 @@ class _HomePageState extends State<HomePage> {
               children: <Widget>[
                 embeddingStartIndex > 0
                     ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: prevEmbedding,
-                )
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: prevEmbedding,
+                      )
                     : const SizedBox(height: 48),
                 isEmbedded
                     ? Column(
-                  children: [
-                    Text(
-                      'Embedding: ${faceEmbeddingResult[embeddingStartIndex]}',
-                    ),
-                    if (embeddingStartIndex + 1 <
-                        faceEmbeddingResult.length)
-                      Text(
-                        '${faceEmbeddingResult[embeddingStartIndex + 1]}',
-                      ),
-                    Text('Blur: ${blurValue.round()}'),
-                  ],
-                )
+                        children: [
+                          Text(
+                            'Embedding: ${faceEmbeddingResult[embeddingStartIndex]}',
+                          ),
+                          if (embeddingStartIndex + 1 <
+                              faceEmbeddingResult.length)
+                            Text(
+                              '${faceEmbeddingResult[embeddingStartIndex + 1]}',
+                            ),
+                          Text('Blur: ${blurValue.round()}'),
+                        ],
+                      )
                     : const SizedBox(height: 48),
                 embeddingStartIndex + 2 < faceEmbeddingResult.length
                     ? IconButton(
-                  icon: const Icon(Icons.arrow_forward),
-                  onPressed: nextEmbedding,
-                )
+                        icon: const Icon(Icons.arrow_forward),
+                        onPressed: nextEmbedding,
+                      )
                     : const SizedBox(height: 48),
               ],
             ),
@@ -488,17 +488,17 @@ class _HomePageState extends State<HomePage> {
             ),
             isAnalyzed
                 ? ElevatedButton.icon(
-              icon: const Icon(Icons.face_retouching_natural),
-              label: const Text('Align faces'),
-              onPressed: alignFaceCustomInterpolation,
-            )
+                    icon: const Icon(Icons.face_retouching_natural),
+                    label: const Text('Align faces'),
+                    onPressed: alignFaceCustomInterpolation,
+                  )
                 : const SizedBox.shrink(),
             (isAligned && !isEmbedded)
                 ? ElevatedButton.icon(
-              icon: const Icon(Icons.numbers_outlined),
-              label: const Text('Embed face'),
-              onPressed: embedFace,
-            )
+                    icon: const Icon(Icons.numbers_outlined),
+                    label: const Text('Embed face'),
+                    onPressed: embedFace,
+                  )
                 : const SizedBox.shrink(),
           ],
         ),
