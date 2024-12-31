@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutterface/services/face_ml/face_ml_service.dart';
 import 'package:flutterface/ui/home/providers/face_detection_provider.dart';
+import 'package:flutterface/ui/home/widgets/custom_bottom_sheet.dart';
 import 'package:flutterface/ui/home/widgets/embedding_controls.dart';
 import 'package:flutterface/ui/home/widgets/face_detection_view.dart';
 import 'package:flutterface/ui/home/widgets/image_controls.dart';
@@ -47,15 +48,23 @@ class HomePageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          FaceDetectionView(),
-          EmbeddingControls(),
-          ImageControls(),
-        ],
-      ),
+    return const Stack(
+      children: [
+        Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              FaceDetectionView(),
+              EmbeddingControls(),
+              ImageControls(),
+            ],
+          ),
+        ),
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: CustomBottomSheet(),
+        ),
+      ],
     );
   }
 }
