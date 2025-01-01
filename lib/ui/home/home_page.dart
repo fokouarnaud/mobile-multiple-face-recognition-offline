@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutterface/services/face_ml/face_ml_service.dart';
 import 'package:flutterface/ui/home/providers/face_detection_provider.dart';
 import 'package:flutterface/ui/home/widgets/custom_bottom_sheet.dart';
-import 'package:flutterface/ui/home/widgets/embedding_controls.dart';
 import 'package:flutterface/ui/home/widgets/face_detection_view.dart';
 import 'package:flutterface/ui/home/widgets/image_controls.dart';
 import 'package:provider/provider.dart';
@@ -55,7 +54,7 @@ class HomePageContent extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.start,
             children: [
               FaceDetectionView(),
-              EmbeddingControls(),
+              SizedBox(height: 16.0),
               ImageControls(),
             ],
           ),
