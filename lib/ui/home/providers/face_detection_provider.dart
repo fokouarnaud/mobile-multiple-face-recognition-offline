@@ -8,10 +8,10 @@ import 'package:flutterface/services/image/stock_image_service.dart';
 import 'package:flutterface/services/snackbar/snackbar_service.dart';
 import 'package:image_picker/image_picker.dart';
 
-
 class FaceDetectionProvider extends ChangeNotifier {
   final ImagePicker _picker = ImagePicker();
-  final FaceProcessingService _faceProcessingService = FaceProcessingService.instance;
+  final FaceProcessingService _faceProcessingService =
+      FaceProcessingService.instance;
   final StockImageService _stockImageService = StockImageService.instance;
   final _snackbarService = SnackbarService.instance;
 
@@ -22,6 +22,9 @@ class FaceDetectionProvider extends ChangeNotifier {
   FaceProcessingResult? processingResult;
   bool isProcessing = false;
   int stockImageCounter = 0;
+
+  double processingProgress = 0.0;
+  String processingStep = '';
 
   Future<void> pickImage(bool fromCamera) async {
     processingResult = null;
@@ -37,7 +40,8 @@ class FaceDetectionProvider extends ChangeNotifier {
   Future<void> pickStockImage() async {
     try {
       processingResult = null;
-      final (imageData, path) = await _stockImageService.getNextStockImage(stockImageCounter);
+      final (imageData, path) =
+          await _stockImageService.getNextStockImage(stockImageCounter);
       imageOriginalData = imageData;
 
       final decodedImage = await decodeImageFromList(imageOriginalData!);
@@ -47,7 +51,8 @@ class FaceDetectionProvider extends ChangeNotifier {
         decodedImage.height.toDouble(),
       );
 
-      stockImageCounter = (stockImageCounter + 1) % _stockImageService.stockImagePaths.length;
+      stockImageCounter =
+          (stockImageCounter + 1) % _stockImageService.stockImagePaths.length;
       notifyListeners();
     } catch (e) {
       _snackbarService.showError('Failed to load stock image: $e');
@@ -73,7 +78,8 @@ class FaceDetectionProvider extends ChangeNotifier {
     if (processingResult == null || processingResult!.detections.isEmpty) {
       _snackbarService.showError('No faces detected');
     } else {
-      _snackbarService.showSuccess('${processingResult!.detections.length} faces detected');
+      _snackbarService
+          .showSuccess('${processingResult!.detections.length} faces detected');
     }
   }
 
@@ -85,18 +91,28 @@ class FaceDetectionProvider extends ChangeNotifier {
 
     processingResult = null;
     isProcessing = true;
+    processingProgress = 0.0;
+    processingStep = 'Initializing...';
     notifyListeners();
 
     try {
       processingResult = await _faceProcessingService.processImage(
         imageOriginalData!,
         imageSize,
+        (progress, step) {
+          processingProgress = progress;
+          processingStep = step;
+          notifyListeners();
+        },
       );
       _showResultSnackbar();
     } catch (e) {
       _snackbarService.showError('Face processing failed: $e');
     } finally {
+      await Future.delayed(const Duration(milliseconds: 200));
       isProcessing = false;
+      processingProgress = 0;
+      processingStep = '';
       notifyListeners();
     }
   }

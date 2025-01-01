@@ -17,9 +17,10 @@ class FaceProcessingService {
   FaceProcessingService._init();
 
   Future<FaceProcessingResult> processImage(
-      Uint8List imageData,
-      Size imageSize,
-      ) async {
+    Uint8List imageData,
+    Size imageSize,
+    void Function(double progress, String step)? onProgress,
+  ) async {
     final results = FaceProcessingResult(
       detections: [],
       alignedFaces: [],
@@ -29,8 +30,13 @@ class FaceProcessingService {
     );
 
     try {
+      onProgress?.call(0.1, 'Initializing face detection...');
+
       // 1. Detect faces
       final relativeDetections = await _faceMlService.detectFaces(imageData);
+
+      onProgress?.call(0.3, 'Faces detected');
+
       final absoluteDetections = relativeToAbsoluteDetections(
         relativeDetections: relativeDetections,
         imageWidth: imageSize.width.round(),
@@ -41,17 +47,24 @@ class FaceProcessingService {
       // 2. Process each detected face
       for (int i = 0; i < absoluteDetections.length; i++) {
         final face = absoluteDetections[i];
+        final progress = 0.3 + (0.6 * (i + 1) / absoluteDetections.length);
+        onProgress?.call(
+          progress,
+          'Processing face ${i + 1} of ${absoluteDetections.length}',
+        );
 
         try {
           // Align face
-          final alignedFaces = await _faceMlService.alignSingleFaceCustomInterpolation(
+          final alignedFaces =
+              await _faceMlService.alignSingleFaceCustomInterpolation(
             imageData,
             face,
           );
           results.alignedFaces.add(alignedFaces[0]);
 
           // Get embedding
-          final (embedding, _, blurValue) = await _faceMlService.embedSingleFace(
+          final (embedding, _, blurValue) =
+              await _faceMlService.embedSingleFace(
             imageData,
             relativeDetections[i],
           );
@@ -76,6 +89,11 @@ class FaceProcessingService {
           continue;
         }
       }
+
+      onProgress?.call(0.9, 'Finalizing results...');
+      await Future.delayed(const Duration(milliseconds: 200));
+      onProgress?.call(1.0, 'Processing complete');
+
     } catch (e) {
       devtools.log('Error during face processing: $e');
       throw Exception('Face processing failed: $e');
