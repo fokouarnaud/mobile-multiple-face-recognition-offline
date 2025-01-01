@@ -35,53 +35,53 @@ class CustomBottomSheet extends StatelessWidget {
                 builder: (context, provider, child) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Center(
-                          child: Container(
-                            width: 40,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(2),
-                            ),
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 24),
+                      if (provider.processingResult != null) ...[
+                        _buildStatsGrid(provider),
                         const SizedBox(height: 24),
-                        if (provider.processingResult != null) ...[
-                          _buildStatsGrid(provider),
-                          const SizedBox(height: 24),
-                          const Text(
-                            'Detected Faces',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        const Text(
+                          'Detected Faces',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
-                          const SizedBox(height: 8),
-                          _buildFacesList(provider),
-                        ] else ...[
-                          Center(
-                            child: Column(
-                              children: [
-                                Icon(
-                                  Icons.face_retouching_natural,
-                                  size: 48,
-                                  color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 8),
+                        _buildFacesList(provider),
+                      ] else ...[
+                        Center(
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.face_retouching_natural,
+                                size: 48,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Click on "Detect faces" to start face detection',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey[600],
                                 ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Click on "Detect faces" to start face detection',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey[600],
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ],
+                    ],
                   );
                 },
               ),
@@ -94,9 +94,24 @@ class CustomBottomSheet extends StatelessWidget {
 
   Widget _buildStatsGrid(FaceDetectionProvider provider) {
     final stats = [
-      {'title': 'Total Faces', 'value': provider.processingResult!.detections.length.toString()},
-      {'title': 'New Faces', 'value': provider.processingResult!.existingFaces.where((exists) => !exists).length.toString()},
-      {'title': 'Registered', 'value': provider.processingResult!.existingFaces.where((exists) => exists).length.toString()},
+      {
+        'title': 'Total Faces',
+        'value': provider.processingResult!.processedFaces.length.toString(),
+      },
+      {
+        'title': 'New Faces',
+        'value': provider.processingResult!.processedFaces
+            .where((face) => !face.isRegistered)
+            .length
+            .toString(),
+      },
+      {
+        'title': 'Registered',
+        'value': provider.processingResult!.processedFaces
+            .where((face) => face.isRegistered)
+            .length
+            .toString(),
+      },
     ];
 
     return GridView.count(
@@ -134,33 +149,77 @@ class CustomBottomSheet extends StatelessWidget {
     return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemCount: provider.processingResult!.detections.length,
+      itemCount: provider.processingResult!.processedFaces.length,
       itemBuilder: (context, index) {
-        final isRegistered = provider.processingResult!.existingFaces[index];
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Row(
-            children: [
-              Text(
-                'Face ${index + 1}',
-                style: const TextStyle(fontSize: 16),
+        final face = provider.processingResult!.processedFaces[index];
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4.0),
+          child: ListTile(
+            leading: ClipRRect(
+              borderRadius: BorderRadius.circular(25),
+              child: Image.memory(
+                face.alignedImage,
+                width: 50,
+                height: 50,
+                fit: BoxFit.cover,
               ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isRegistered ? Colors.green.withAlpha(51) : Colors.orange.withAlpha(51),
-                  borderRadius: BorderRadius.circular(12),
+            ),
+            title: Text(
+              face.name ?? 'Unregistered Face',
+              style: const TextStyle(fontSize: 16),
+            ),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: face.isRegistered
+                    ? Colors.green.withAlpha(51)
+                    : Colors.orange.withAlpha(51),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                face.isRegistered ? 'Registered' : 'New',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: face.isRegistered ? Colors.green : Colors.orange,
                 ),
-                child: Text(
-                  isRegistered ? 'Registered' : 'New',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isRegistered ? Colors.green : Colors.orange,
+              ),
+            ),
+            onTap: () async {
+              await showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          face.alignedImage,
+                          width: 200,
+                          height: 200,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        face.name ?? 'Unregistered Face',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+              );
+            },
           ),
         );
       },

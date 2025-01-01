@@ -6,12 +6,12 @@ import 'package:flutterface/models/face_processing_result.dart';
 import 'package:flutterface/services/face_processing/face_processing_service.dart';
 import 'package:flutterface/services/image/stock_image_service.dart';
 import 'package:flutterface/services/snackbar/snackbar_service.dart';
+import 'package:flutterface/ui/home/widgets/new_face_dialog.dart';
 import 'package:image_picker/image_picker.dart';
 
 class FaceDetectionProvider extends ChangeNotifier {
   final ImagePicker _picker = ImagePicker();
-  final FaceProcessingService _faceProcessingService =
-      FaceProcessingService.instance;
+  final FaceProcessingService _faceProcessingService = FaceProcessingService.instance;
   final StockImageService _stockImageService = StockImageService.instance;
   final _snackbarService = SnackbarService.instance;
 
@@ -40,8 +40,7 @@ class FaceDetectionProvider extends ChangeNotifier {
   Future<void> pickStockImage() async {
     try {
       processingResult = null;
-      final (imageData, path) =
-          await _stockImageService.getNextStockImage(stockImageCounter);
+      final (imageData, path) = await _stockImageService.getNextStockImage(stockImageCounter);
       imageOriginalData = imageData;
 
       final decodedImage = await decodeImageFromList(imageOriginalData!);
@@ -51,8 +50,7 @@ class FaceDetectionProvider extends ChangeNotifier {
         decodedImage.height.toDouble(),
       );
 
-      stockImageCounter =
-          (stockImageCounter + 1) % _stockImageService.stockImagePaths.length;
+      stockImageCounter = (stockImageCounter + 1) % _stockImageService.stockImagePaths.length;
       notifyListeners();
     } catch (e) {
       _snackbarService.showError('Failed to load stock image: $e');
@@ -78,12 +76,26 @@ class FaceDetectionProvider extends ChangeNotifier {
     if (processingResult == null || processingResult!.detections.isEmpty) {
       _snackbarService.showError('No faces detected');
     } else {
-      _snackbarService
-          .showSuccess('${processingResult!.detections.length} faces detected');
+      final newFaces = processingResult!.processedFaces.where((face) => !face.isRegistered).length;
+      final registeredFaces = processingResult!.processedFaces.where((face) => face.isRegistered).length;
+
+      if (registeredFaces > 0 && newFaces > 0) {
+        _snackbarService.showSuccess(
+          '${processingResult!.detections.length} faces detected ($registeredFaces registered, $newFaces new)',
+        );
+      } else if (registeredFaces > 0) {
+        _snackbarService.showSuccess(
+          '${processingResult!.detections.length} registered faces detected',
+        );
+      } else {
+        _snackbarService.showSuccess(
+          '${processingResult!.detections.length} new faces detected',
+        );
+      }
     }
   }
 
-  Future<void> processAndSaveFaces() async {
+  Future<void> processAndSaveFaces(BuildContext context) async {
     if (imageOriginalData == null) {
       _snackbarService.showError('Please select an image first');
       return;
@@ -99,10 +111,21 @@ class FaceDetectionProvider extends ChangeNotifier {
       processingResult = await _faceProcessingService.processImage(
         imageOriginalData!,
         imageSize,
-        (progress, step) {
+            (progress, step) {
           processingProgress = progress;
           processingStep = step;
           notifyListeners();
+        },
+            (faceImage, embedding) async {
+          // Only show dialog for new faces
+          return showDialog<String>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => NewFaceDialog(
+              faceImage: faceImage,
+              embedding: embedding,
+            ),
+          );
         },
       );
       _showResultSnackbar();
@@ -123,6 +146,8 @@ class FaceDetectionProvider extends ChangeNotifier {
     imageSize = const Size(0, 0);
     processingResult = null;
     isProcessing = false;
+    processingProgress = 0.0;
+    processingStep = '';
     notifyListeners();
   }
 }

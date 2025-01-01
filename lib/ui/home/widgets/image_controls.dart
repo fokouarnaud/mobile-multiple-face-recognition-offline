@@ -27,8 +27,9 @@ class ImageControls extends StatelessWidget {
                   ? Icons.pending
                   : Icons.people_alt_outlined,
               label: 'Detect faces',
-              onPressed:
-                  provider.isProcessing ? null : provider.processAndSaveFaces,
+              onPressed: provider.isProcessing
+                  ? null
+                  : () async => provider.processAndSaveFaces(context),
               size: ButtonSize.lg,
               style: provider.isProcessing
                   ? ElevatedButton.styleFrom(
