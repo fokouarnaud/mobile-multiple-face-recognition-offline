@@ -1,3 +1,5 @@
+// lib/ui/home/widgets/face_detection_view.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutterface/ui/home/providers/face_detection_provider.dart';
 import 'package:flutterface/ui/shared/buttons/custom_button.dart';
@@ -18,25 +20,39 @@ class FaceDetectionView extends StatelessWidget {
     return Container(
       height: imageDisplaySize.height,
       width: imageDisplaySize.width,
-      color: Colors.black,
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Stack(
         alignment: Alignment.bottomCenter,
         children: [
-          buildImageContent(context, provider, imageDisplaySize),
-          buildImageButtons(context, provider),
+          _buildImageContent(context, provider, imageDisplaySize),
+          _buildImageButtons(context, provider),
         ],
       ),
     );
   }
 
-  Widget buildImageButtons(
+  Widget _buildImageButtons(
       BuildContext context,
       FaceDetectionProvider provider,
       ) {
-    return Padding(
+    return Container(
       padding: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [
+            Colors.black.withAlpha(178),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.8],
+        ),
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           CustomButton(
             icon: Icons.image,
@@ -61,24 +77,38 @@ class FaceDetectionView extends StatelessWidget {
     );
   }
 
-  Widget buildImageContent(
+  Widget _buildImageContent(
       BuildContext context,
       FaceDetectionProvider provider,
       Size imageDisplaySize,
       ) {
     if (provider.imageOriginal == null) {
       return const Center(
-        child: Text(
-          'No image selected',
-          style: TextStyle(color: Colors.white),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.image_search,
+              color: Colors.white30,
+              size: 64,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'No image selected',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+              ),
+            ),
+          ],
         ),
       );
     }
 
-    return buildOriginalImage(provider, imageDisplaySize);
+    return _buildOriginalImage(provider, imageDisplaySize);
   }
 
-  Widget buildOriginalImage(
+  Widget _buildOriginalImage(
       FaceDetectionProvider provider,
       Size imageDisplaySize,
       ) {
@@ -89,7 +119,7 @@ class FaceDetectionView extends StatelessWidget {
           if (provider.processingResult?.detections != null)
             CustomPaint(
               painter: FacePainter(
-                faceDetections: provider.processingResult?.detections ?? [],
+                faceDetections: provider.processingResult!.detections,
                 imageSize: provider.imageSize,
                 availableSize: imageDisplaySize,
               ),

@@ -36,6 +36,8 @@ dependencies:
   crypto: ^3.0.3
   path_provider: ^2.1.1
   path: ^1.8.3
+  fluro: ^2.0.5
+  flutter_native_splash: ^2.3.10
   # vector_math: ^2.1.4
   # matrix2d: ^1.0.4
   onnxruntime:
@@ -59,3 +61,12 @@ flutter:
   assets:
     - assets/models/
     - assets/images/stock_images/
+
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/images/splash.png
+  android_12:
+    color: "#FFFFFF"
+    image: assets/images/splash.png
+  ios: true
+  web: false
