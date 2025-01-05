@@ -1,7 +1,8 @@
+// lib/ui/home/widgets/image_controls.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutterface/ui/home/providers/face_detection_provider.dart';
 import 'package:flutterface/ui/home/widgets/process_progress.dart';
-import 'package:flutterface/ui/shared/buttons/custom_button.dart';
 import 'package:provider/provider.dart';
 
 class ImageControls extends StatelessWidget {
@@ -20,29 +21,7 @@ class ImageControls extends StatelessWidget {
               progress: provider.processingProgress,
               step: provider.processingStep,
             ),
-          SizedBox(
-            width: double.infinity,
-            child: CustomButton(
-              icon: provider.isProcessing
-                  ? Icons.pending
-                  : Icons.people_alt_outlined,
-              label: 'Detect faces',
-              onPressed: provider.isProcessing
-                  ? null
-                  : () async => provider.processAndSaveFaces(context),
-              size: ButtonSize.lg,
-              style: provider.isProcessing
-                  ? ElevatedButton.styleFrom(
-                      backgroundColor:
-                          Theme.of(context).colorScheme.primary.withAlpha(100),
-                      foregroundColor: Theme.of(context)
-                          .colorScheme
-                          .onPrimary
-                          .withAlpha(150),
-                    )
-                  : null,
-            ),
-          ),
+
         ],
       ),
     );

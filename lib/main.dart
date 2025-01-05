@@ -1,12 +1,12 @@
 import 'dart:developer' as devtools show log;
+
+import 'package:computer/computer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:fluro/fluro.dart';
-import 'package:computer/computer.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
-import 'package:logging/logging.dart';
 import 'package:flutterface/config/routes.dart';
 import 'package:flutterface/services/snackbar/snackbar_service.dart';
+import 'package:logging/logging.dart';
 
 Future<void> main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();

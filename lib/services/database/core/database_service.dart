@@ -1,3 +1,4 @@
+// lib/services/database/core/database_service.dart
 
 import 'package:flutterface/services/database/core/sql_statements.dart';
 import 'package:path/path.dart';
@@ -7,7 +8,7 @@ class DatabaseService {
   static final DatabaseService instance = DatabaseService._init();
   static Database? _database;
 
-  DatabaseService._init(); // Private constructor
+  DatabaseService._init();
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -22,13 +23,27 @@ class DatabaseService {
     return openDatabase(
       path,
       version: 1,
-      onCreate: (Database db, int version) async {
-        await db.execute(SqlStatements.createBoxesTable);
-        await db.execute(SqlStatements.createFacesTable);
-        await db.execute(SqlStatements.createImageHashIndex);
-        await db.execute(SqlStatements.createBoxIdIndex);
-      },
+      onCreate: _onCreate,
+      onConfigure: _onConfigure,
     );
   }
-}
 
+  Future<void> _onConfigure(Database db) async {
+    await db.execute('PRAGMA foreign_keys = ON');
+  }
+
+  Future<void> _onCreate(Database db, int version) async {
+    await db.transaction((txn) async {
+      await txn.execute(SqlStatements.createBoxesTable);
+      await txn.execute(SqlStatements.createFacesTable);
+      await txn.execute(SqlStatements.createAttendanceTable);
+      await txn.execute(SqlStatements.createFaceBoxIndex);
+      await txn.execute(SqlStatements.createAttendanceIndex);
+    });
+  }
+
+  Future<T> runInTransaction<T>(Future<T> Function(Transaction txn) action) async {
+    final db = await database;
+    return db.transaction(action);
+  }
+}

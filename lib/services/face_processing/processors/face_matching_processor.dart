@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:developer' as devtools show log;
 import 'dart:typed_data';
 
-import 'package:flutterface/models/face_processing_result.dart';
+import 'package:flutterface/models/face_match.dart';
 import 'package:flutterface/models/face_record.dart';
+import 'package:flutterface/models/processed_face.dart';
 import 'package:flutterface/services/database/face_database_service.dart';
-import 'package:flutterface/services/database/models/face_match.dart';
 
 class FaceMatchingProcessor {
   final FaceDatabaseService _dbService = FaceDatabaseService.instance;

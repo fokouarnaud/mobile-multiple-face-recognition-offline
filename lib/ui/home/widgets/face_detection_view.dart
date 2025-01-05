@@ -1,8 +1,8 @@
-// lib/ui/home/widgets/face_detection_view.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutterface/ui/home/providers/face_detection_provider.dart';
-import 'package:flutterface/ui/shared/buttons/custom_button.dart';
+import 'package:flutterface/ui/home/widgets/camera_controls.dart';
+import 'package:flutterface/ui/home/widgets/empty_state_view.dart';
+import 'package:flutterface/ui/home/widgets/processing_overlay.dart';
 import 'package:flutterface/utils/face_detection_painter.dart';
 import 'package:provider/provider.dart';
 
@@ -32,6 +32,7 @@ class FaceDetectionView extends StatelessWidget {
         ],
       ),
     );
+
   }
 
   Widget _buildImageButtons(
@@ -51,29 +52,7 @@ class FaceDetectionView extends StatelessWidget {
           stops: const [0.0, 0.8],
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          CustomButton(
-            icon: Icons.image,
-            label: 'Gallery',
-            size: ButtonSize.xs,
-            onPressed: () async => provider.pickImage(false),
-          ),
-          CustomButton(
-            icon: Icons.photo_camera,
-            label: 'Camera',
-            size: ButtonSize.xs,
-            onPressed: () async => provider.pickImage(true),
-          ),
-          CustomButton(
-            icon: Icons.collections,
-            label: 'Stock',
-            size: ButtonSize.xs,
-            onPressed: provider.pickStockImage,
-          ),
-        ],
-      ),
+      child: const CameraControls(),
     );
   }
 
@@ -83,26 +62,7 @@ class FaceDetectionView extends StatelessWidget {
       Size imageDisplaySize,
       ) {
     if (provider.imageOriginal == null) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.image_search,
-              color: Colors.white30,
-              size: 64,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'No image selected',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
-      );
+      return const EmptyStateView();
     }
 
     return _buildOriginalImage(provider, imageDisplaySize);
@@ -124,8 +84,11 @@ class FaceDetectionView extends StatelessWidget {
                 availableSize: imageDisplaySize,
               ),
             ),
+          if (provider.isProcessing)
+            const ProcessingOverlay(),
         ],
       ),
     );
   }
 }
+

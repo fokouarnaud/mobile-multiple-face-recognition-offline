@@ -2,21 +2,11 @@
 import 'dart:developer' as devtools show log;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutterface/models/detection_result.dart';
 import 'package:flutterface/services/face_ml/face_detection/detection.dart';
 import 'package:flutterface/services/face_ml/face_ml_service.dart';
 
-class DetectionResult {
-  final List<FaceDetectionAbsolute> absoluteDetections;
-  final List<FaceDetectionRelative> relativeDetections;
 
-  DetectionResult({
-    required this.absoluteDetections,
-    required this.relativeDetections,
-  });
-
-  bool get hasDetections => absoluteDetections.isNotEmpty;
-  int get length => absoluteDetections.length;
-}
 
 class FaceDetectionProcessor {
   final FaceMlService _mlService = FaceMlService.instance;
