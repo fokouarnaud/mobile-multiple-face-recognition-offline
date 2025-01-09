@@ -1,240 +1,223 @@
-//lib/providers/face_detection_provider.dart
+// lib/ui/home/providers/face_detection_provider.dart
 
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutterface/models/attendance_record.dart';
 import 'package:flutterface/models/attendance_stats.dart';
-import 'package:flutterface/models/face_processing_result.dart';
 import 'package:flutterface/models/face_record.dart';
 import 'package:flutterface/models/processed_face.dart';
-import 'package:flutterface/services/database/repositories/attendance_repository.dart';
-import 'package:flutterface/services/database/repositories/face_repository.dart';
+import 'package:flutterface/models/processing_result.dart';
 import 'package:flutterface/services/face_processing/face_processing_service.dart';
 import 'package:flutterface/services/image/stock_image_service.dart';
 import 'package:flutterface/services/snackbar/snackbar_service.dart';
-
 import 'package:flutterface/ui/home/widgets/register_face_dialog.dart';
 import 'package:image_picker/image_picker.dart';
 
 class FaceDetectionProvider extends ChangeNotifier {
+  // Constructor and Properties
   final int boxId;
-  int _period;
+  final int period;
 
   FaceDetectionProvider({
     required this.boxId,
-    required int period,
-  }) : _period = period;
-
-  // Getter for current period
-  int get period => _period;
+    required this.period,
+  }) {
+    unawaited(_loadRegisteredFaces());
+  }
 
   // Services
+  final FaceProcessingService _faceProcService = FaceProcessingService.instance;
+  final _snackbar = SnackbarService.instance;
   final ImagePicker _picker = ImagePicker();
-  final FaceProcessingService _faceProcessingService = FaceProcessingService.instance;
-  final FaceRepository _faceRepo = FaceRepository();
-  final AttendanceRepository _attendanceRepo = AttendanceRepository();
   final StockImageService _stockImageService = StockImageService.instance;
-  final _snackbarService = SnackbarService.instance;
-
-  // Image State
-  Image? imageOriginal;
-  Uint8List? imageOriginalData;
-  Size imageSize = const Size(0, 0);
-  int stockImageCounter = 0;
 
   // Processing State
-  FaceProcessingResult? processingResult;
-  bool isProcessing = false;
-  double processingProgress = 0.0;
-  String processingStep = '';
+  bool _isProcessing = false;
+  double _processingProgress = 0.0;
+  String _processingStep = '';
+  ProcessingResult? _processingResult;
 
-  // Attendance Stats
-  AttendanceStats? attendanceStats;
-
-  // Face Records
+  // UI State
+  Image? _imageOriginal;
+  Uint8List? _imageData;
+  Size _imageSize = Size.zero;
   List<FaceRecord> _registeredFaces = [];
-  List<ProcessedFace> _processedFaces = [];
+  AttendanceStats? _attendanceStats;
+  int _stockImageIndex = 0;
 
   // Getters
-  int get registeredFacesCount => _registeredFaces.length;
+  bool get isProcessing => _isProcessing;
+  double get processingProgress => _processingProgress;
+  String get processingStep => _processingStep;
+  ProcessingResult? get processingResult => _processingResult;
+  Image? get imageOriginal => _imageOriginal;
+  Size get imageSize => _imageSize;
   List<FaceRecord> get registeredFaces => _registeredFaces;
-
-  List<ProcessedFace> get presentFaces => _processedFaces
-      .where((face) => face.isRegistered && (face.similarity ?? 0) >= 0.6)
-      .toList();
-
-  List<ProcessedFace> get absentFaces {
-    final presentIds = presentFaces.map((f) => f.registeredId).toSet();
-    return _registeredFaces
-        .where((face) => !presentIds.contains(face.id))
-        .map((face) => ProcessedFace(
-      isRegistered: true,
-      registeredId: face.id,
-      name: face.name,
-      alignedImage: _decodeImageHash(face.imageHash),
-      embedding: face.embedding,
-      blurValue: 0,
-    ),)
-        .toList();
-  }
+  int get registeredFacesCount => _registeredFaces.length;
+  AttendanceStats? get attendanceStats => _attendanceStats;
+  bool get hasImage => _imageData != null;
 
   // Image Selection Methods
   Future<void> pickImage(bool fromCamera) async {
-    _resetProcessingState();
-    final XFile? image = fromCamera
-        ? await _picker.pickImage(source: ImageSource.camera)
-        : await _picker.pickImage(source: ImageSource.gallery);
+    try {
+      final XFile? image = fromCamera
+          ? await _picker.pickImage(source: ImageSource.camera)
+          : await _picker.pickImage(source: ImageSource.gallery);
 
-    if (image != null) {
-      await _processImage(image);
+      if (image != null) {
+        await _loadImage(image);
+      }
+    } catch (e) {
+      _snackbar.showError('Failed to pick image: $e');
     }
   }
 
   Future<void> pickStockImage() async {
     try {
+      final (imageData, path) =
+          await _stockImageService.getNextStockImage(_stockImageIndex);
+      _imageData = imageData;
+
+      final decodedImage = await decodeImageFromList(_imageData!);
+      _imageOriginal = Image.asset(path);
+      _imageSize = Size(
+        decodedImage.width.toDouble(),
+        decodedImage.height.toDouble(),
+      );
+
+      _stockImageIndex =
+          (_stockImageIndex + 1) % _stockImageService.stockImagePaths.length;
+
       _resetProcessingState();
-      final (imageData, path) = await _stockImageService.getNextStockImage(stockImageCounter);
-      imageOriginalData = imageData;
-
-      final decodedImage = await decodeImageFromList(imageOriginalData!);
-      imageOriginal = Image.asset(path);
-      imageSize = Size(
-        decodedImage.width.toDouble(),
-        decodedImage.height.toDouble(),
-      );
-
-      stockImageCounter = (stockImageCounter + 1) % _stockImageService.stockImagePaths.length;
       notifyListeners();
     } catch (e) {
-      _snackbarService.showError('Failed to load stock image: $e');
+      _snackbar.showError('Failed to load stock image: $e');
     }
   }
 
-  Future<void> _processImage(XFile image) async {
-    try {
-      imageOriginalData = await image.readAsBytes();
-      final decodedImage = await decodeImageFromList(imageOriginalData!);
-      imageOriginal = Image.file(File(image.path));
-      imageSize = Size(
-        decodedImage.width.toDouble(),
-        decodedImage.height.toDouble(),
-      );
-      notifyListeners();
-    } catch (e) {
-      _snackbarService.showError('Failed to process image: $e');
-    }
-  }
-
-
-  // Attendance Processing
-  Future<void> processAndRecordAttendance() async {
-    if (imageOriginalData == null) {
-      _snackbarService.showError('Please select an image first');
-      return;
-    }
-
-    _setProcessingState(true);
-
-    try {
-      processingResult = await _faceProcessingService.processImage(
-        imageOriginalData!,
-        imageSize,
-        boxId,
-        _period,  // Use current period
-        _updateProgress,
-      );
-
-      _processedFaces = processingResult!.processedFaces;
-      await _updateAttendanceStats();
-      _showAttendanceResults();
-
-    } catch (e) {
-      _snackbarService.showError('Attendance processing failed: $e');
-    } finally {
-      _setProcessingState(false);
-    }
-  }
-
-  // Update period method
-  void updatePeriod(int newPeriod) {
-    _period = newPeriod;
-    // Reset state when period changes
+  Future<void> _loadImage(XFile image) async {
     _resetProcessingState();
-    // Optionally update stats for new period
-    if (processingResult != null) {
-      _updateAttendanceStats();
+
+    try {
+      _imageData = await image.readAsBytes();
+      final decodedImage = await decodeImageFromList(_imageData!);
+
+      _imageOriginal = Image.file(File(image.path));
+      _imageSize = Size(
+        decodedImage.width.toDouble(),
+        decodedImage.height.toDouble(),
+      );
+
+      notifyListeners();
+    } catch (e) {
+      _snackbar.showError('Failed to load image: $e');
     }
   }
-  // Helper Methods
-  Future<void> _loadRegisteredFaces() async {
-    _registeredFaces = await _faceRepo.getFacesByBoxId(boxId);
-    notifyListeners();
-  }
 
-
-
-  Future<void> _updateAttendanceStats() async {
-    attendanceStats = await _attendanceRepo.getAttendanceStats(
-      boxId,
-      _period,  // Use current period
-      DateTime.now(),
-    );
-    notifyListeners();
-  }
-
-  void _showAttendanceResults() {
-    if (processingResult == null || !processingResult!.hasDetections) {
-      _snackbarService.showError('No faces detected');
+  // Face Registration
+  Future<void> detectAndRegisterFaces(BuildContext context) async {
+    if (!hasImage) {
+      _snackbar.showError('Please select an image first');
       return;
     }
 
-    if (attendanceStats != null) {
-      _snackbarService.showSuccess(
-        'Found ${processingResult!.detections.length} faces\n'
-            'Present: ${attendanceStats!.present}\n'
-            'Absent: ${attendanceStats!.absent}\n'
-            'Total Registered: ${attendanceStats!.totalRegistered}',
+    _updateProcessingState(true, step: 'Detecting faces...', progress: 0.1);
+
+    try {
+      final detectionResult =
+          await _faceProcService.detectFaces(_imageData!, _imageSize);
+      _updateProcessingState(true, step: 'Processing faces...', progress: 0.3);
+
+      final processedFaces = <ProcessedFace>[];
+      for (var i = 0; i < detectionResult.absoluteDetections.length; i++) {
+        final progress =
+            0.3 + (0.6 * (i + 1) / detectionResult.absoluteDetections.length);
+        _updateProcessingState(
+          true,
+          step:
+              'Processing face ${i + 1} of ${detectionResult.absoluteDetections.length}',
+          progress: progress,
+        );
+
+        final face = await _faceProcService.processFace(
+          _imageData!,
+          detectionResult.absoluteDetections[i],
+          detectionResult.relativeDetections[i],
+        );
+        processedFaces.add(face);
+      }
+
+      _processingResult = ProcessingResult(
+        detections: detectionResult,
+        processedFaces: processedFaces,
       );
+
+      _updateProcessingState(true, step: 'Done', progress: 1.0);
+      notifyListeners();
+
+      if (context.mounted) {
+        await _processDetectedFaces(context);
+      }
+
+      await _loadRegisteredFaces();
+    } catch (e) {
+      _snackbar.showError('Face detection failed: $e');
+    } finally {
+      _updateProcessingState(false);
     }
   }
 
+  Future<void> _processDetectedFaces(BuildContext context) async {
+    if (_processingResult == null) return;
 
-
-  void _updateProgress(double progress, String step) {
-    processingProgress = progress;
-    processingStep = step;
-    notifyListeners();
-  }
-
-  void _setProcessingState(bool processing) {
-    isProcessing = processing;
-    if (!processing) {
-      processingProgress = 0.0;
-      processingStep = '';
+    for (final face in _processingResult!.processedFaces) {
+      if (!face.isRegistered && context.mounted) {
+        final name = await _showRegisterDialog(context, face);
+        if (name != null) {
+          await saveFaceRecord(face, name);
+        }
+      }
     }
-    notifyListeners();
   }
 
-  void _resetProcessingState() {
-    processingResult = null;
-    isProcessing = false;
-    processingProgress = 0.0;
-    processingStep = '';
-    attendanceStats = null;
-    _processedFaces.clear();
-    notifyListeners();
+  Future<String?> _showRegisterDialog(
+    BuildContext context,
+    ProcessedFace face,
+  ) async {
+    if (!context.mounted) return null;
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => RegisterFaceDialog(
+        faceImage: face.alignedImage,
+        embedding: face.embedding,
+      ),
+    );
+  }
+  // Add these methods to FaceDetectionProvider class
+
+  Future<void> updateFaceRecord(FaceRecord face) async {
+    try {
+      await _faceProcService.updateFaceRecord(face);
+      _snackbar.showSuccess('Face updated successfully');
+      await _loadRegisteredFaces();
+    } catch (e) {
+      _snackbar.showError('Failed to update face: $e');
+    }
   }
 
-  // Utility Methods
-  String _encodeImageHash(Uint8List imageData) {
-    // Implement your image hash encoding logic
-    return '';  // Placeholder
-  }
-
-  Uint8List _decodeImageHash(String hash) {
-    // Implement your image hash decoding logic
-    return Uint8List(0);  // Placeholder
+  Future<void> deleteFaceRecord(int id) async {
+    try {
+      await _faceProcService.deleteFaceRecord(id);
+      _snackbar.showSuccess('Face deleted successfully');
+      await _loadRegisteredFaces();
+    } catch (e) {
+      _snackbar.showError('Failed to delete face: $e');
+    }
   }
 
   Future<void> saveFaceRecord(ProcessedFace face, String name) async {
@@ -244,82 +227,132 @@ class FaceDetectionProvider extends ChangeNotifier {
         boxId: boxId,
         embedding: face.embedding,
         createdAt: DateTime.now(),
-        imageHash: _encodeImageHash(face.alignedImage),
+        imageHash: base64Encode(face.alignedImage),
       );
 
-      await _faceRepo.saveFaceRecord(record);
-      await _loadRegisteredFaces(); // Refresh list
-      _snackbarService.showSuccess('Face registered successfully');
+      await _faceProcService.saveFaceRecord(record);
+      _snackbar.showSuccess('Face registered successfully');
+      await _loadRegisteredFaces();
     } catch (e) {
-      _snackbarService.showError('Failed to save face record: $e');
+      _snackbar.showError('Failed to save face: $e');
     }
   }
 
-  Future<void> deleteFaceRecord(int faceId) async {
-    try {
-      await _faceRepo.deleteFaceRecord(faceId);
-      await _loadRegisteredFaces(); // Refresh list
-      _snackbarService.showSuccess('Face record deleted');
-    } catch (e) {
-      _snackbarService.showError('Failed to delete face record: $e');
-    }
-  }
-
-  Future<void> _showRegisterDialog(BuildContext context, ProcessedFace face) async {
-    final name = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => RegisterFaceDialog(
-        faceImage: face.alignedImage,
-        embedding: face.embedding,
-      ),
-    );
-
-    if (name != null) {
-      await saveFaceRecord(face, name);
-    }
-  }
-
-  // Update the detectAndRegisterFaces method:
-  Future<void> detectAndRegisterFaces(BuildContext context) async {
-    if (imageOriginalData == null) {
-      _snackbarService.showError('Please select an image first');
+  // Attendance Processing
+  Future<void> processAndRecordAttendance() async {
+    if (!hasImage) {
+      _snackbar.showError('Please select an image first');
       return;
     }
 
-    _setProcessingState(true);
+    _updateProcessingState(
+      true,
+      step: 'Processing attendance...',
+      progress: 0.0,
+    );
 
     try {
-      processingResult = await _faceProcessingService.processImage(
-        imageOriginalData!,
-        imageSize,
-        boxId,
-        _period,
-        _updateProgress,
+      final detectionResult =
+          await _faceProcService.detectFaces(_imageData!, _imageSize);
+      _updateProcessingState(true, step: 'Processing faces...', progress: 0.3);
+
+      final processedFaces = <ProcessedFace>[];
+      for (var i = 0; i < detectionResult.absoluteDetections.length; i++) {
+        final progress =
+            0.3 + (0.6 * (i + 1) / detectionResult.absoluteDetections.length);
+        _updateProcessingState(
+          true,
+          step:
+              'Processing face ${i + 1} of ${detectionResult.absoluteDetections.length}',
+          progress: progress,
+        );
+
+        final face = await _faceProcService.processFace(
+          _imageData!,
+          detectionResult.absoluteDetections[i],
+          detectionResult.relativeDetections[i],
+        );
+        processedFaces.add(face);
+      }
+
+      _processingResult = ProcessingResult(
+        detections: detectionResult,
+        processedFaces: processedFaces,
       );
 
-      if (!processingResult!.hasDetections) {
-        _snackbarService.showError('No faces detected');
-        return;
-      }
+      // Record attendance for registered faces
+      _updateProcessingState(
+        true,
+        step: 'Recording attendance...',
+        progress: 0.9,
+      );
 
-      // Show registration dialog for each new face
-      for (final face in processingResult!.processedFaces) {
-        if (!face.isRegistered) {
-          await _showRegisterDialog(context, face);
-        }
-      }
+      final attendanceRecords = _processingResult!.processedFaces
+          .where((face) => face.isRegistered && face.registeredId != null)
+          .map(
+            (face) => AttendanceRecord(
+              id: 0,
+              faceId: face.registeredId!,
+              timestamp: DateTime.now(),
+              period: period,
+              similarity: face.similarity ?? 0,
+              detectedImageHash: base64Encode(face.alignedImage),
+            ),
+          )
+          .toList();
 
+      await _faceProcService.recordBatchAttendance(attendanceRecords);
+
+      // Update stats
+      _attendanceStats = await _faceProcService.getAttendanceStats(
+        boxId,
+        period,
+        DateTime.now(),
+      );
+
+      _updateProcessingState(true, step: 'Done', progress: 1.0);
+      _snackbar.showSuccess('Attendance recorded successfully');
+      notifyListeners();
     } catch (e) {
-      _snackbarService.showError('Face detection failed: $e');
+      _snackbar.showError('Failed to record attendance: $e');
     } finally {
-      _setProcessingState(false);
+      _updateProcessingState(false);
     }
   }
+
+  // Helper Methods
+  Future<void> _loadRegisteredFaces() async {
+    try {
+      _registeredFaces = await _faceProcService.getFacesByBoxId(boxId);
+      notifyListeners();
+    } catch (e) {
+      _snackbar.showError('Failed to load registered faces: $e');
+    }
+  }
+
+  void _updateProcessingState(
+    bool isProcessing, {
+    String step = '',
+    double progress = 0.0,
+  }) {
+    _isProcessing = isProcessing;
+    _processingStep = step;
+    _processingProgress = progress;
+    notifyListeners();
+  }
+
+  void _resetProcessingState() {
+    _isProcessing = false;
+    _processingProgress = 0.0;
+    _processingStep = '';
+    _processingResult = null;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
+    _resetProcessingState();
     _registeredFaces.clear();
-    _processedFaces.clear();
     super.dispose();
   }
 }

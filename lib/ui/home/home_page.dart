@@ -1,11 +1,12 @@
+// lib/ui/home/home_page.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutterface/config/routes.dart';
 import 'package:flutterface/services/face_ml/face_ml_service.dart';
-import 'package:flutterface/ui/home/home_page_content.dart';
 import 'package:flutterface/ui/home/providers/face_detection_provider.dart';
+import 'package:flutterface/ui/home/widgets/face_detection_view.dart';
 import 'package:flutterface/ui/home/widgets/info_dialog.dart';
-
 import 'package:provider/provider.dart';
 
 class HomePage extends StatefulWidget {
@@ -23,6 +24,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  int _selectedIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -44,37 +47,73 @@ class _HomePageState extends State<HomePage> {
           period: DateTime.now().hour,
         ),
         child: Scaffold(
-          appBar: _buildAppBar(context),
-          body: const HomePageContent(),
+          body: SafeArea(
+            child: Column(
+              children: [
+                _buildAppBar(),
+                Expanded(
+                  child: FaceDetectionView(
+                    isRegistrationMode: _selectedIndex == 0,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          bottomNavigationBar: _buildBottomNav(),
         ),
       ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
+  Widget _buildAppBar() {
     final theme = Theme.of(context);
-    return AppBar(
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () async => Routes.navigateToRoot(context),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () async => Routes.navigateToRoot(context),
+          ),
+          Expanded(
+            child: Text(
+              widget.title,
+              style: theme.textTheme.titleLarge,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            onPressed: _showInfoDialog,
+          ),
+        ],
       ),
-      title: Text(
-        widget.title,
-        style: theme.textTheme.headlineSmall,
-      ),
-      centerTitle: true,
-      backgroundColor: theme.colorScheme.surface,
-      elevation: 0,
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.info_outline),
-          onPressed: _showInfoDialog,
+    );
+  }
+
+  Widget _buildBottomNav() {
+    final theme = Theme.of(context);
+
+    return NavigationBar(
+      height: 60,
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+      destinations: [
+        NavigationDestination(
+          icon: const Icon(Icons.person_add_outlined),
+          selectedIcon:
+              Icon(Icons.person_add, color: theme.colorScheme.primary),
+          label: 'Register',
+        ),
+        NavigationDestination(
+          icon: const Icon(Icons.fact_check_outlined),
+          selectedIcon:
+              Icon(Icons.fact_check, color: theme.colorScheme.primary),
+          label: 'Attendance',
         ),
       ],
     );
   }
-
-
 
   Future<void> _showInfoDialog() async {
     await showDialog<void>(
