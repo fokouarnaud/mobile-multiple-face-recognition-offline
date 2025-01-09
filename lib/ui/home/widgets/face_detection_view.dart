@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutterface/models/face_record.dart';
 import 'package:flutterface/ui/home/providers/face_detection_provider.dart';
 import 'package:flutterface/ui/home/widgets/camera_controls.dart';
+import 'package:flutterface/ui/home/widgets/edit_face_dialog.dart';
 import 'package:flutterface/ui/home/widgets/empty_state_view.dart';
 import 'package:flutterface/ui/home/widgets/processing_overlay.dart';
 import 'package:flutterface/utils/date_formatter.dart';
@@ -22,20 +23,29 @@ class FaceDetectionView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imageDisplaySize = Size(
+      MediaQuery.of(context).size.width * 0.8,
+      MediaQuery.of(context).size.width * 0.8 * 1.5,
+    );
+
     return Consumer<FaceDetectionProvider>(
       builder: (context, provider, _) {
         return CustomScrollView(
           slivers: [
             // Fixed Video-like Frame at Top
             SliverToBoxAdapter(
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
+              child: Center(
                 child: Container(
-                  color: Colors.black,
+                  height: imageDisplaySize.height,
+                  width: imageDisplaySize.width,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Stack(
-                    fit: StackFit.expand,
+                    alignment: Alignment.bottomCenter,
                     children: [
-                      _buildImageContent(context, provider),
+                      _buildImageContent(context, provider, imageDisplaySize),
                       if (provider.imageOriginal != null)
                         _buildOverlays(),
                       _buildControls(),
@@ -45,12 +55,10 @@ class FaceDetectionView extends StatelessWidget {
               ),
             ),
 
-            // Add some space after the video frame
+            // Rest of the content...
             const SliverToBoxAdapter(
               child: SizedBox(height: 8),
             ),
-
-            // Rest of your content
             SliverToBoxAdapter(
               child: _buildStatistics(context, provider),
             ),
@@ -68,6 +76,7 @@ class FaceDetectionView extends StatelessWidget {
       },
     );
   }
+
 
   Widget _buildStatistics(
     BuildContext context,
@@ -210,9 +219,10 @@ class FaceDetectionView extends StatelessWidget {
   }
 
   Widget _buildImageContent(
-    BuildContext context,
-    FaceDetectionProvider provider,
-  ) {
+      BuildContext context,
+      FaceDetectionProvider provider,
+      Size imageDisplaySize,
+      ) {
     if (provider.imageOriginal == null) {
       return const EmptyStateView();
     }
@@ -223,15 +233,14 @@ class FaceDetectionView extends StatelessWidget {
           provider.imageOriginal!,
           if (provider.processingResult != null)
             CustomPaint(
-              size: provider.imageSize,
               painter: FacePainter(
-                faceDetections:
-                    provider.processingResult!.detections.absoluteDetections,
+                faceDetections: provider.processingResult!.detections.absoluteDetections,
                 imageSize: provider.imageSize,
-                availableSize: provider.imageSize,
+                availableSize: imageDisplaySize,
               ),
             ),
-          if (provider.isProcessing) const ProcessingOverlay(),
+          if (provider.isProcessing)
+            const ProcessingOverlay(),
         ],
       ),
     );
@@ -299,64 +308,16 @@ class FaceDetectionView extends StatelessWidget {
   }
 
   Future<void> _showEditDialog(BuildContext context, FaceRecord face) async {
-    final provider = context.read<FaceDetectionProvider>();
-    final nameController = TextEditingController(text: face.name);
-    final formKey = GlobalKey<FormState>();
+    context.read<FaceDetectionProvider>();
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Face Name'),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: nameController,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              border: OutlineInputBorder(),
-            ),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter a name';
-              }
-              return null;
-            },
-            autofocus: true,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(context, true);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+      builder: (context) => EditFaceDialog(face: face),
     );
 
     if (result == true) {
-      final newName = nameController.text.trim();
-      if (newName != face.name) {
-        final updatedFace = FaceRecord(
-          id: face.id,
-          name: newName,
-          boxId: face.boxId,
-          embedding: face.embedding,
-          imageHash: face.imageHash,
-          createdAt: face.createdAt,
-        );
-        await provider.updateFaceRecord(updatedFace);
-      }
+      // Handle the result if needed
     }
-
-    nameController.dispose();
   }
 
   Future<void> _showDeleteConfirmation(BuildContext context, FaceRecord face) async {
