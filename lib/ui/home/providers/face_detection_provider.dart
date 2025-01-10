@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:excel/excel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutterface/models/attendance_record.dart';
@@ -14,7 +15,10 @@ import 'package:flutterface/services/face_processing/face_processing_service.dar
 import 'package:flutterface/services/image/stock_image_service.dart';
 import 'package:flutterface/services/snackbar/snackbar_service.dart';
 import 'package:flutterface/ui/home/widgets/register_face_dialog.dart';
+import 'package:flutterface/utils/date_formatter.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class FaceDetectionProvider extends ChangeNotifier {
   // Constructor and Properties
@@ -317,6 +321,170 @@ class FaceDetectionProvider extends ChangeNotifier {
       _snackbar.showError('Failed to record attendance: $e');
     } finally {
       _updateProcessingState(false);
+    }
+  }
+
+  Future<bool> _requestStoragePermission() async {
+    if (Platform.isAndroid) {
+      final status = await Permission.storage.status;
+      if (status.isDenied) {
+        final result = await Permission.storage.request();
+        return result.isGranted;
+      }
+      return status.isGranted;
+    }
+    return true;
+  }
+
+  Future<void> exportAttendanceReport() async {
+    if (processingResult == null || attendanceStats == null) {
+      _snackbar.showError('No attendance data available');
+      return;
+    }
+
+    if (!await _requestStoragePermission()) {
+      _snackbar.showError('Storage permission is required to export report');
+      return;
+    }
+
+    try {
+      final excel = Excel.createExcel();
+      final sheet = excel.sheets.values.first;
+
+      // Style for headers
+      final headerStyle = CellStyle(
+        bold: true,
+        backgroundColorHex: '#E0E0E0',
+        horizontalAlign: HorizontalAlign.Center,
+      );
+
+      // Header information
+      sheet.merge(CellIndex.indexByString('A1'), CellIndex.indexByString('D1'));
+      sheet.cell(CellIndex.indexByString('A1'))
+        ..value = 'Attendance Report'
+        ..cellStyle = headerStyle;
+
+      final now = DateTime.now();
+      sheet.cell(CellIndex.indexByString('A2')).value = 'Date:';
+      sheet.cell(CellIndex.indexByString('B2')).value =
+          DateFormatter.formatDate(now);
+      sheet.cell(CellIndex.indexByString('C2')).value = 'Time:';
+      sheet.cell(CellIndex.indexByString('D2')).value =
+          DateFormatter.formatTime(now);
+
+      // Summary section
+      sheet.merge(CellIndex.indexByString('A4'), CellIndex.indexByString('D4'));
+      sheet.cell(CellIndex.indexByString('A4'))
+        ..value = 'Summary'
+        ..cellStyle = headerStyle;
+
+      sheet.cell(CellIndex.indexByString('A5')).value = 'Total Registered:';
+      sheet.cell(CellIndex.indexByString('B5')).value =
+          attendanceStats!.totalRegistered;
+      sheet.cell(CellIndex.indexByString('A6')).value = 'Present:';
+      sheet.cell(CellIndex.indexByString('B6')).value =
+          attendanceStats!.present;
+      sheet.cell(CellIndex.indexByString('A7')).value = 'Absent:';
+      sheet.cell(CellIndex.indexByString('B7')).value = attendanceStats!.absent;
+
+      // Filter processed faces for current box
+      final present = processingResult!.processedFaces
+          .where(
+            (face) =>
+                face.isRegistered &&
+                _registeredFaces
+                    .any((registered) => registered.id == face.registeredId),
+          )
+          .toList();
+
+      // Present list
+      var row = 9;
+      sheet.merge(
+        CellIndex.indexByString('A$row'),
+        CellIndex.indexByString('D$row'),
+      );
+      sheet.cell(CellIndex.indexByString('A$row'))
+        ..value = 'Present Students'
+        ..cellStyle = headerStyle;
+
+      row++;
+      sheet.cell(CellIndex.indexByString('A$row'))
+        ..value = 'Name'
+        ..cellStyle = headerStyle;
+      sheet.cell(CellIndex.indexByString('B$row'))
+        ..value = 'Similarity'
+        ..cellStyle = headerStyle;
+      sheet.cell(CellIndex.indexByString('C$row'))
+        ..value = 'Time'
+        ..cellStyle = headerStyle;
+
+      row++;
+      for (final face in present) {
+        sheet.cell(CellIndex.indexByString('A$row')).value = face.name;
+        sheet.cell(CellIndex.indexByString('B$row')).value =
+            '${(face.similarity! * 100).toStringAsFixed(1)}%';
+        sheet.cell(CellIndex.indexByString('C$row')).value =
+            DateFormatter.formatTime(now);
+        row++;
+      }
+
+      // Absent list
+      final absent = _registeredFaces
+          .where(
+            (registered) => !present
+                .any((detected) => detected.registeredId == registered.id),
+          )
+          .toList();
+
+      row += 2;
+      sheet.merge(
+        CellIndex.indexByString('A$row'),
+        CellIndex.indexByString('D$row'),
+      );
+      sheet.cell(CellIndex.indexByString('A$row'))
+        ..value = 'Absent Students'
+        ..cellStyle = headerStyle;
+
+      row++;
+      sheet.cell(CellIndex.indexByString('A$row'))
+        ..value = 'Name'
+        ..cellStyle = headerStyle;
+
+      row++;
+      for (final face in absent) {
+        sheet.cell(CellIndex.indexByString('A$row')).value = face.name;
+        row++;
+      }
+
+      // Set column widths
+      sheet.setColWidth(0, 25);
+      sheet.setColWidth(1, 15);
+      sheet.setColWidth(2, 15);
+      sheet.setColWidth(3, 15);
+
+      // Save file
+      final bytes = excel.save();
+      if (bytes != null) {
+        if (Platform.isAndroid) {
+          final downloadsDirectory = Directory('/storage/emulated/0/Download');
+          final filename =
+              'attendance_${now.year}${now.month}${now.day}_${now.hour}${now.minute}.xlsx';
+          final file = File('${downloadsDirectory.path}/$filename');
+          await file.writeAsBytes(bytes);
+          _snackbar.showSuccess('Report exported to Downloads folder');
+        } else {
+          final directory = await getApplicationDocumentsDirectory();
+          final filename =
+              'attendance_${now.year}${now.month}${now.day}_${now.hour}${now.minute}.xlsx';
+          final file = File('${directory.path}/$filename');
+          await file.writeAsBytes(bytes);
+          _snackbar.showSuccess('Report exported to: ${file.path}');
+        }
+      } else {
+        throw Exception('Failed to generate Excel file');
+      }
+    } catch (e) {
+      _snackbar.showError('Failed to export report: $e');
     }
   }
 

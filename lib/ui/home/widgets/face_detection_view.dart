@@ -198,21 +198,35 @@ class FaceDetectionView extends StatelessWidget {
   ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: isRegistrationMode
-          ? FilledButton.icon(
-              onPressed: provider.imageOriginal == null || provider.isProcessing
-                  ? null
-                  : () async => provider.detectAndRegisterFaces(context),
-              icon: const Icon(Icons.face),
-              label: const Text('Register Faces'),
-            )
-          : FilledButton.icon(
-              onPressed: provider.imageOriginal == null || provider.isProcessing
-                  ? null
-                  : provider.processAndRecordAttendance,
-              icon: const Icon(Icons.fact_check),
-              label: const Text('Check Attendance'),
+      child: Column(
+        children: [
+          isRegistrationMode
+              ? FilledButton.icon(
+                  onPressed: provider.imageOriginal == null ||
+                          provider.isProcessing
+                      ? null
+                      : () async => provider.detectAndRegisterFaces(context),
+                  icon: const Icon(Icons.face),
+                  label: const Text('Register Faces'),
+                )
+              : FilledButton.icon(
+                  onPressed:
+                      provider.imageOriginal == null || provider.isProcessing
+                          ? null
+                          : provider.processAndRecordAttendance,
+                  icon: const Icon(Icons.fact_check),
+                  label: const Text('Check Attendance'),
+                ),
+          if (!isRegistrationMode && provider.processingResult != null) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: provider.exportAttendanceReport,
+              icon: const Icon(Icons.download),
+              label: const Text('Export to Excel'),
             ),
+          ],
+        ],
+      ),
     );
   }
 
