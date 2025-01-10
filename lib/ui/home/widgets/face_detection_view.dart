@@ -46,8 +46,7 @@ class FaceDetectionView extends StatelessWidget {
                     alignment: Alignment.bottomCenter,
                     children: [
                       _buildImageContent(context, provider, imageDisplaySize),
-                      if (provider.imageOriginal != null)
-                        _buildOverlays(),
+                      if (provider.imageOriginal != null) _buildOverlays(),
                       _buildControls(),
                     ],
                   ),
@@ -76,7 +75,6 @@ class FaceDetectionView extends StatelessWidget {
       },
     );
   }
-
 
   Widget _buildStatistics(
     BuildContext context,
@@ -219,10 +217,10 @@ class FaceDetectionView extends StatelessWidget {
   }
 
   Widget _buildImageContent(
-      BuildContext context,
-      FaceDetectionProvider provider,
-      Size imageDisplaySize,
-      ) {
+    BuildContext context,
+    FaceDetectionProvider provider,
+    Size imageDisplaySize,
+  ) {
     if (provider.imageOriginal == null) {
       return const EmptyStateView();
     }
@@ -234,13 +232,13 @@ class FaceDetectionView extends StatelessWidget {
           if (provider.processingResult != null)
             CustomPaint(
               painter: FacePainter(
-                faceDetections: provider.processingResult!.detections.absoluteDetections,
+                faceDetections:
+                    provider.processingResult!.detections.absoluteDetections,
                 imageSize: provider.imageSize,
                 availableSize: imageDisplaySize,
               ),
             ),
-          if (provider.isProcessing)
-            const ProcessingOverlay(),
+          if (provider.isProcessing) const ProcessingOverlay(),
         ],
       ),
     );
@@ -275,7 +273,7 @@ class FaceDetectionView extends StatelessWidget {
   Widget _buildRegistrationList(FaceDetectionProvider provider) {
     return SliverList(
       delegate: SliverChildBuilderDelegate(
-            (context, index) {
+        (context, index) {
           final face = provider.registeredFaces[index];
           return Card(
             child: ListTile(
@@ -295,7 +293,8 @@ class FaceDetectionView extends StatelessWidget {
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
-                    onPressed: () async => _showDeleteConfirmation(context, face),
+                    onPressed: () async =>
+                        _showDeleteConfirmation(context, face),
                   ),
                 ],
               ),
@@ -320,7 +319,10 @@ class FaceDetectionView extends StatelessWidget {
     }
   }
 
-  Future<void> _showDeleteConfirmation(BuildContext context, FaceRecord face) async {
+  Future<void> _showDeleteConfirmation(
+    BuildContext context,
+    FaceRecord face,
+  ) async {
     final provider = context.read<FaceDetectionProvider>();
 
     final result = await showDialog<bool>(
@@ -352,9 +354,17 @@ class FaceDetectionView extends StatelessWidget {
   Widget _buildAttendanceList(FaceDetectionProvider provider) {
     if (provider.processingResult == null) return const SliverToBoxAdapter();
 
+    // Filter processed faces to only show those matching faces from current box
     final present = provider.processingResult!.processedFaces
-        .where((face) => face.isRegistered)
+        .where(
+          (face) =>
+              face.isRegistered &&
+              provider.registeredFaces
+                  .any((registered) => registered.id == face.registeredId),
+        )
         .toList();
+
+    // Get absent faces from current box's registered faces
     final absent = provider.registeredFaces
         .where(
           (registered) => !present

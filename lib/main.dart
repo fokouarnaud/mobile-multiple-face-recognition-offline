@@ -9,7 +9,7 @@ import 'package:flutterface/services/snackbar/snackbar_service.dart';
 import 'package:logging/logging.dart';
 
 Future<void> main() async {
-  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  final WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   Logger.root.level = Level.ALL;
